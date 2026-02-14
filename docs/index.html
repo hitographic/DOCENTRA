@@ -406,16 +406,6 @@ textarea.form-control { resize: vertical; min-height: 80px; }
         <div class="login-subtitle">Document Control System</div>
       </div>
       <div class="login-body">
-        <div class="setup-info-box" id="apiUrlSetup">
-          ⚙️ <strong>Konfigurasi API</strong><br>
-          Masukkan URL Apps Script Web App Anda:
-          <div class="form-group" style="margin-top:8px;margin-bottom:0;">
-            <input type="text" class="form-control" id="apiUrlInput" placeholder="https://script.google.com/macros/s/XXXX/exec" style="font-size:0.8rem;">
-          </div>
-          <div style="margin-top:6px;text-align:right;">
-            <button class="btn btn-sm btn-primary" onclick="saveApiUrl()">💾 Simpan URL</button>
-          </div>
-        </div>
         
         <div class="login-error" id="loginError"></div>
         
@@ -634,7 +624,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
  */
 
 // ==================== CONFIG & STATE ====================
-var API_URL = localStorage.getItem('docentra_api_url') || '';
+var API_URL = 'https://script.google.com/macros/s/AKfycbyN70SFMYAFG4Nrf_MEqeWnoHY2TFSMUc_HNoh3lN0lcdTH4XqnYl-5ayEZb7T6BkcI9g/exec';
 var AUTH_TOKEN = localStorage.getItem('docentra_token') || '';
 
 var appState = {
@@ -692,10 +682,7 @@ function apiPost(action, body) {
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', function() {
   // Check if API URL is configured
-  if (API_URL) {
-    document.getElementById('apiUrlInput').value = API_URL;
-    document.getElementById('apiUrlSetup').style.display = 'none';
-  }
+  // API_URL is hardcoded - no setup needed
   
   // Check if already logged in
   if (AUTH_TOKEN && API_URL) {
@@ -719,23 +706,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ==================== AUTH ====================
-function saveApiUrl() {
-  var url = document.getElementById('apiUrlInput').value.trim();
-  if (!url) { showToast('Masukkan URL API', 'warning'); return; }
-  if (url.indexOf('script.google.com') === -1) { showToast('URL tidak valid. Gunakan URL Apps Script Web App.', 'error'); return; }
-  
-  API_URL = url;
-  localStorage.setItem('docentra_api_url', url);
-  document.getElementById('apiUrlSetup').style.display = 'none';
-  showToast('URL API tersimpan!', 'success');
-}
-
 function doLogin() {
   var email = document.getElementById('loginEmail').value.trim();
   var password = document.getElementById('loginPassword').value;
   
   if (!email || !password) { showLoginError('Email dan password wajib diisi'); return; }
-  if (!API_URL) { showLoginError('Konfigurasi URL API terlebih dahulu'); document.getElementById('apiUrlSetup').style.display = 'block'; return; }
   
   document.getElementById('loginBtn').disabled = true;
   document.getElementById('loginBtn').textContent = '⏳ Memproses...';
@@ -770,7 +745,6 @@ function doRegister() {
   
   if (!name || !email || !password) { showLoginError('Semua field wajib diisi'); return; }
   if (password.length < 6) { showLoginError('Password minimal 6 karakter'); return; }
-  if (!API_URL) { showLoginError('Konfigurasi URL API terlebih dahulu'); document.getElementById('apiUrlSetup').style.display = 'block'; return; }
   
   document.getElementById('regBtn').disabled = true;
   document.getElementById('regBtn').textContent = '⏳ Memproses...';

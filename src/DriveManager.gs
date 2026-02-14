@@ -99,14 +99,14 @@ var DriveManager = {
     var mimeType = file.getMimeType();
     var blob = file.getBlob();
     
-    // Konversi ke Google Sheet sementara
+    // Konversi ke Google Sheet sementara menggunakan Drive API v3
     var resource = {
-      title: 'DOCENTRA_TEMP_' + new Date().getTime(),
+      name: 'DOCENTRA_TEMP_' + new Date().getTime(),
       mimeType: MimeType.GOOGLE_SHEETS
     };
     
-    var tempFile = Drive.Files.insert(resource, blob, {
-      convert: true
+    var tempFile = Drive.Files.create(resource, blob, {
+      fields: 'id'
     });
     
     var tempSpreadsheet = SpreadsheetApp.openById(tempFile.id);
