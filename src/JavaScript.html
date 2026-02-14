@@ -1,0 +1,1082 @@
+<script>
+/**
+ * ============================================================
+ *  DOCENTRA - Document Control System
+ *  JavaScript.html - Client-Side Logic
+ * ============================================================
+ */
+
+// ==================== STATE ====================
+var appState = {
+  currentPage: 'dashboard',
+  currentDocId: null,
+  currentUser: null,
+  config: null,
+  documents: [],
+  selectedFile: null,
+  selectedNewDocFile: null,
+  searchTimeout: null
+};
+
+// ==================== INITIALIZATION ====================
+document.addEventListener('DOMContentLoaded', function() {
+  showLoading('Memuat DOCENTRA...');
+  
+  // Load config & user info
+  google.script.run
+    .withSuccessHandler(function(config) {
+      appState.config = config;
+      populateFilters();
+      
+      google.script.run
+        .withSuccessHandler(function(user) {
+          appState.currentUser = user;
+          updateUserDisplay();
+          hideLoading();
+          loadDashboard();
+        })
+        .withFailureHandler(handleError)
+        .serverGetCurrentUser();
+    })
+    .withFailureHandler(handleError)
+    .serverGetConfig();
+});
+
+// ==================== NAVIGATION ====================
+function navigateTo(page, params) {
+  // Hide all pages
+  var sections = document.querySelectorAll('.page-section');
+  for (var i = 0; i < sections.length; i++) {
+    sections[i].classList.remove('active');
+  }
+  
+  // Update tabs
+  var tabs = document.querySelectorAll('.nav-tab');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].classList.remove('active');
+    if (tabs[i].getAttribute('data-page') === page) {
+      tabs[i].classList.add('active');
+    }
+  }
+  
+  // Show target page
+  var targetPage = document.getElementById('page-' + page);
+  if (targetPage) {
+    targetPage.classList.add('active');
+  }
+  
+  appState.currentPage = page;
+  
+  // Load data for page
+  switch (page) {
+    case 'dashboard':
+      loadDashboard();
+      break;
+    case 'documents':
+      loadDocuments();
+      break;
+    case 'detail':
+      if (params && params.docId) {
+        loadDocumentDetail(params.docId);
+      }
+      break;
+    case 'compare':
+      loadCompareDocuments();
+      break;
+    case 'admin':
+      loadUsers();
+      break;
+  }
+}
+
+// ==================== DASHBOARD ====================
+function loadDashboard() {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        // Update stats
+        document.getElementById('statTotal').textContent = result.stats.total;
+        document.getElementById('statReview').textContent = result.stats.review;
+        document.getElementById('statApproved').textContent = result.stats.approved;
+        document.getElementById('statDraft').textContent = result.stats.draft;
+        
+        // Update recent docs table
+        renderRecentDocs(result.stats.recentUpdates);
+      }
+    })
+    .withFailureHandler(handleError)
+    .serverGetDashboard();
+}
+
+function renderRecentDocs(docs) {
+  var tbody = document.getElementById('recentDocsTable');
+  
+  if (!docs || docs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:40px;color:var(--text-secondary);">' +
+      '<div class="empty-state"><div class="empty-icon">📭</div><h3>Belum ada dokumen</h3>' +
+      '<p>Klik "Dokumen Baru" untuk menambahkan dokumen pertama</p></div></td></tr>';
+    return;
+  }
+  
+  var html = '';
+  for (var i = 0; i < docs.length; i++) {
+    var doc = docs[i];
+    html += '<tr onclick="navigateTo(\'detail\', {docId: \'' + doc.doc_id + '\'})">' +
+      '<td><strong>' + doc.doc_id + '</strong></td>' +
+      '<td>' + escHtml(doc.doc_number) + '</td>' +
+      '<td>' + escHtml(doc.title) + '</td>' +
+      '<td>' + escHtml(doc.category) + '</td>' +
+      '<td><strong>v' + doc.current_version + '</strong></td>' +
+      '<td>' + getStatusBadge(doc.status) + '</td>' +
+      '<td>' + formatDate(doc.updated_at) + '</td>' +
+      '</tr>';
+  }
+  
+  tbody.innerHTML = html;
+}
+
+// ==================== DOCUMENTS ====================
+function loadDocuments(filters) {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        appState.documents = result.documents;
+        renderDocumentsTable(result.documents);
+      }
+    })
+    .withFailureHandler(handleError)
+    .serverGetDocuments(filters || null);
+}
+
+function renderDocumentsTable(docs) {
+  var tbody = document.getElementById('documentsTable');
+  
+  if (!docs || docs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding:40px;color:var(--text-secondary);">' +
+      '<div class="empty-state"><div class="empty-icon">📭</div><h3>Tidak ada dokumen ditemukan</h3>' +
+      '<p>Buat dokumen baru atau ubah filter pencarian</p></div></td></tr>';
+    return;
+  }
+  
+  var html = '';
+  for (var i = 0; i < docs.length; i++) {
+    var doc = docs[i];
+    html += '<tr onclick="navigateTo(\'detail\', {docId: \'' + doc.doc_id + '\'})">' +
+      '<td><strong>' + doc.doc_id + '</strong></td>' +
+      '<td>' + escHtml(doc.doc_number) + '</td>' +
+      '<td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(doc.title) + '</td>' +
+      '<td>' + escHtml(doc.category) + '</td>' +
+      '<td>' + escHtml(doc.department) + '</td>' +
+      '<td><strong>v' + doc.current_version + '</strong></td>' +
+      '<td>' + getStatusBadge(doc.status) + '</td>' +
+      '<td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();navigateTo(\'detail\', {docId: \'' + doc.doc_id + '\'})">Detail →</button></td>' +
+      '</tr>';
+  }
+  
+  tbody.innerHTML = html;
+}
+
+function handleSearch(query) {
+  clearTimeout(appState.searchTimeout);
+  appState.searchTimeout = setTimeout(function() {
+    applyFilters();
+  }, 300);
+}
+
+function applyFilters() {
+  var filters = {};
+  var search = document.getElementById('searchInput').value.trim();
+  var status = document.getElementById('filterStatus').value;
+  var category = document.getElementById('filterCategory').value;
+  var department = document.getElementById('filterDepartment').value;
+  
+  if (search) filters.search = search;
+  if (status) filters.status = status;
+  if (category) filters.category = category;
+  if (department) filters.department = department;
+  
+  loadDocuments(Object.keys(filters).length > 0 ? filters : null);
+}
+
+// ==================== DOCUMENT DETAIL ====================
+function loadDocumentDetail(docId) {
+  appState.currentDocId = docId;
+  showLoading('Memuat detail dokumen...');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        renderDocumentDetail(result);
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      hideLoading();
+      handleError(err);
+    })
+    .serverGetDocumentDetail(docId);
+}
+
+function renderDocumentDetail(data) {
+  var doc = data.document;
+  var versions = data.versions;
+  
+  // Breadcrumb
+  document.getElementById('detailBreadcrumb').textContent = doc.doc_number + ' - ' + doc.title;
+  
+  // Title
+  document.getElementById('detailTitle').innerHTML = '📄 ' + escHtml(doc.title);
+  
+  // Actions
+  var actionsHtml = '';
+  if (data.canReview && doc.status === 'Draft') {
+    actionsHtml += '<button class="btn btn-outline btn-sm" onclick="changeDocStatus(\'' + doc.doc_id + '\', \'Review\')">📋 Submit Review</button>';
+  }
+  if (data.canApprove && doc.status === 'Review') {
+    actionsHtml += '<button class="btn btn-success btn-sm" onclick="changeDocStatus(\'' + doc.doc_id + '\', \'Approved\')">✅ Approve</button>';
+    actionsHtml += '<button class="btn btn-ghost btn-sm" onclick="changeDocStatus(\'' + doc.doc_id + '\', \'Draft\')">↩️ Return to Draft</button>';
+  }
+  document.getElementById('detailActions').innerHTML = actionsHtml;
+  
+  // Detail Info
+  var infoHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+    '<div class="info-row"><span class="label">Doc ID</span><span class="value">' + doc.doc_id + '</span></div>' +
+    '<div class="info-row"><span class="label">Nomor</span><span class="value">' + escHtml(doc.doc_number) + '</span></div>' +
+    '<div class="info-row"><span class="label">Kategori</span><span class="value">' + escHtml(doc.category) + '</span></div>' +
+    '<div class="info-row"><span class="label">Departemen</span><span class="value">' + escHtml(doc.department) + '</span></div>' +
+    '</div>';
+  document.getElementById('detailInfo').innerHTML = infoHtml;
+  
+  // Sidebar
+  var sidebarHtml = '<div class="info-row"><span class="label">Status</span><span class="value">' + getStatusBadge(doc.status) + '</span></div>' +
+    '<div class="info-row"><span class="label">Versi Saat Ini</span><span class="value" style="font-size:1.1rem;color:var(--primary-dark);">v' + doc.current_version + '</span></div>' +
+    '<div class="info-row"><span class="label">Dibuat</span><span class="value">' + formatDate(doc.created_at) + '</span></div>' +
+    '<div class="info-row"><span class="label">Diperbarui</span><span class="value">' + formatDate(doc.updated_at) + '</span></div>';
+  document.getElementById('detailSidebar').innerHTML = sidebarHtml;
+  
+  // Version Timeline
+  renderVersionTimeline(versions);
+  
+  // Reset upload & diff sections
+  clearFileSelection();
+  document.getElementById('diffResultSection').classList.add('hidden');
+  document.getElementById('changeSummaryInput').value = '';
+  
+  // Show upload section only if user can upload
+  document.getElementById('uploadSection').style.display = data.user.permissions.canUpload ? 'block' : 'none';
+  
+  // Navigate to detail page
+  var sections = document.querySelectorAll('.page-section');
+  for (var i = 0; i < sections.length; i++) sections[i].classList.remove('active');
+  document.getElementById('page-detail').classList.add('active');
+  
+  // Update tabs
+  var tabs = document.querySelectorAll('.nav-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+}
+
+function renderVersionTimeline(versions) {
+  var container = document.getElementById('versionTimeline');
+  
+  if (!versions || versions.length === 0) {
+    container.innerHTML = '<div class="empty-state" style="padding:20px;"><p>Belum ada versi</p></div>';
+    return;
+  }
+  
+  var html = '<div class="timeline">';
+  for (var i = 0; i < versions.length; i++) {
+    var v = versions[i];
+    html += '<div class="timeline-item">' +
+      '<div class="flex-between">' +
+      '<span class="timeline-version">v' + v.version + '</span>' +
+      '<button class="btn btn-ghost btn-sm" onclick="openFile(\'' + v.file_id + '\')" title="Buka file">📥</button>' +
+      '</div>' +
+      '<div class="timeline-date">' + formatDate(v.upload_date) + '</div>' +
+      '<div class="timeline-user">👤 ' + escHtml(v.uploaded_by) + '</div>';
+    
+    if (v.change_summary) {
+      html += '<div class="timeline-summary">' + escHtml(v.change_summary) + '</div>';
+    }
+    
+    if (i < versions.length - 1) {
+      html += '<button class="btn btn-outline btn-sm mt-2" onclick="viewVersionDiff(\'' + versions[i + 1].version + '\', \'' + v.version + '\')">🔍 Lihat Diff</button>';
+    }
+    
+    html += '</div>';
+  }
+  html += '</div>';
+  
+  container.innerHTML = html;
+}
+
+// ==================== FILE UPLOAD ====================
+function handleFileSelect(input) {
+  var file = input.files[0];
+  if (!file) return;
+  
+  // Validate extension
+  var ext = file.name.split('.').pop().toLowerCase();
+  if (['xlsx', 'xls'].indexOf(ext) === -1) {
+    showToast('Format file tidak didukung. Gunakan .xlsx atau .xls', 'error');
+    input.value = '';
+    return;
+  }
+  
+  // Validate size (25MB)
+  if (file.size > 25 * 1024 * 1024) {
+    showToast('Ukuran file melebihi 25MB', 'error');
+    input.value = '';
+    return;
+  }
+  
+  appState.selectedFile = file;
+  
+  document.getElementById('selectedFileInfo').classList.remove('hidden');
+  document.getElementById('selectedFileName').textContent = file.name;
+  document.getElementById('selectedFileSize').textContent = formatFileSize(file.size);
+  document.getElementById('uploadBtn').disabled = false;
+  document.getElementById('uploadZone').classList.add('has-file');
+}
+
+function clearFileSelection() {
+  appState.selectedFile = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('selectedFileInfo').classList.add('hidden');
+  document.getElementById('uploadBtn').disabled = true;
+  document.getElementById('uploadZone').classList.remove('has-file');
+}
+
+function uploadNewVersion() {
+  if (!appState.selectedFile || !appState.currentDocId) return;
+  
+  showLoading('Mengupload dan membandingkan file...\nProses ini mungkin memerlukan beberapa saat.');
+  document.getElementById('uploadBtn').disabled = true;
+  
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = btoa(
+      new Uint8Array(e.target.result)
+        .reduce(function(data, byte) { return data + String.fromCharCode(byte); }, '')
+    );
+    
+    var changeSummary = document.getElementById('changeSummaryInput').value.trim();
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result.success) {
+          showToast(result.message, 'success');
+          
+          // Show diff if available
+          if (result.diff) {
+            renderDiffResult(result.diff);
+          }
+          
+          // Refresh detail page
+          loadDocumentDetail(appState.currentDocId);
+          clearFileSelection();
+          document.getElementById('changeSummaryInput').value = '';
+        } else {
+          showToast(result.message, 'error');
+          document.getElementById('uploadBtn').disabled = false;
+        }
+      })
+      .withFailureHandler(function(err) {
+        hideLoading();
+        handleError(err);
+        document.getElementById('uploadBtn').disabled = false;
+      })
+      .serverUploadNewVersion(appState.currentDocId, base64, appState.selectedFile.name, changeSummary);
+  };
+  
+  reader.readAsArrayBuffer(appState.selectedFile);
+}
+
+// ==================== DIFF RENDERING (GitHub-style) ====================
+function renderDiffResult(diff) {
+  var section = document.getElementById('diffResultSection');
+  var content = document.getElementById('diffResultContent');
+  section.classList.remove('hidden');
+  
+  var html = '';
+  
+  // Summary bar
+  html += '<div class="diff-summary">' +
+    '<div class="diff-summary-stats">' +
+    '<div class="diff-summary-stat modified"><div class="value">' + (diff.summary.cellsModified || 0) + '</div><div class="label">Diubah</div></div>' +
+    '<div class="diff-summary-stat added"><div class="value">' + (diff.summary.cellsAdded || 0) + '</div><div class="label">Ditambah</div></div>' +
+    '<div class="diff-summary-stat removed"><div class="value">' + (diff.summary.cellsRemoved || 0) + '</div><div class="label">Dihapus</div></div>' +
+    '</div>' +
+    '<div style="font-size:0.85rem;color:var(--text-secondary);">Total: <strong>' + (diff.summary.totalChanges || 0) + '</strong> perubahan</div>' +
+    '</div>';
+  
+  // Sheet filter tabs
+  if (diff.sheetDiffs && diff.sheetDiffs.length > 1) {
+    html += '<div class="sheet-tabs">';
+    html += '<div class="sheet-tab active" onclick="filterDiffSheet(\'all\', this)">Semua Sheet</div>';
+    for (var i = 0; i < diff.sheetDiffs.length; i++) {
+      html += '<div class="sheet-tab" onclick="filterDiffSheet(\'' + escHtml(diff.sheetDiffs[i].name) + '\', this)">' + 
+        escHtml(diff.sheetDiffs[i].name) + ' (' + diff.sheetDiffs[i].changeCount + ')</div>';
+    }
+    html += '</div>';
+  }
+  
+  // Per-sheet diff
+  if (diff.sheetDiffs) {
+    for (var s = 0; s < diff.sheetDiffs.length; s++) {
+      var sheet = diff.sheetDiffs[s];
+      
+      html += '<div class="diff-container diff-sheet-block" data-sheet="' + escHtml(sheet.name) + '">';
+      
+      // Sheet header
+      var statusIcon = '📝';
+      if (sheet.status === 'added') statusIcon = '➕';
+      else if (sheet.status === 'removed') statusIcon = '➖';
+      
+      html += '<div class="diff-header">' +
+        '<div class="sheet-name">' + statusIcon + ' Sheet: <strong>' + escHtml(sheet.name) + '</strong> ' +
+        '<span class="change-count">(' + sheet.changeCount + ' perubahan)</span></div>' +
+        '<div class="diff-stats">' +
+        '<span class="additions">+' + countByType(sheet.rows, 'Added') + '</span>' +
+        '<span class="deletions">-' + countByType(sheet.rows, 'Removed') + '</span>' +
+        '</div></div>';
+      
+      // Diff table
+      html += '<table class="diff-table">';
+      html += '<tr><th style="width:80px;">Cell</th><th>Nilai Lama</th><th>Nilai Baru</th><th style="width:80px;">Tipe</th></tr>';
+      
+      for (var r = 0; r < sheet.rows.length; r++) {
+        var row = sheet.rows[r];
+        var rowClass = '';
+        var marker = '';
+        
+        if (row.type === 'Added') {
+          html += '<tr class="diff-line-new">';
+          marker = '<span class="diff-marker add">+</span>';
+        } else if (row.type === 'Removed') {
+          html += '<tr class="diff-line-old">';
+          marker = '<span class="diff-marker remove">−</span>';
+        } else {
+          html += '<tr>';
+          marker = '<span class="diff-marker" style="color:var(--primary);">≠</span>';
+        }
+        
+        html += '<td class="cell-addr">' + escHtml(row.cell) + '</td>';
+        
+        // Old value
+        if (row.type === 'Added') {
+          html += '<td style="color:var(--mid-gray);font-style:italic;">—</td>';
+        } else {
+          html += '<td style="background:var(--diff-remove-bg);color:var(--diff-remove-text);">' +
+            '<span class="diff-marker remove">−</span> ' + escHtml(row.oldValue || '') + '</td>';
+        }
+        
+        // New value
+        if (row.type === 'Removed') {
+          html += '<td style="color:var(--mid-gray);font-style:italic;">—</td>';
+        } else {
+          html += '<td style="background:var(--diff-add-bg);color:var(--diff-add-text);">' +
+            '<span class="diff-marker add">+</span> ' + escHtml(row.newValue || '') + '</td>';
+        }
+        
+        // Type badge
+        var typeBadge = '';
+        switch (row.type) {
+          case 'Added': typeBadge = '<span class="badge badge-approved">Added</span>'; break;
+          case 'Removed': typeBadge = '<span class="badge badge-obsolete">Removed</span>'; break;
+          default: typeBadge = '<span class="badge badge-review">Modified</span>'; break;
+        }
+        html += '<td>' + typeBadge + '</td>';
+        
+        html += '</tr>';
+      }
+      
+      html += '</table></div>';
+    }
+  }
+  
+  if (!diff.sheetDiffs || diff.sheetDiffs.length === 0) {
+    html += '<div class="empty-state" style="padding:40px;"><div class="empty-icon">✨</div>' +
+      '<h3>Tidak ada perubahan</h3><p>Kedua versi file identik</p></div>';
+  }
+  
+  content.innerHTML = html;
+  
+  // Scroll to diff
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function filterDiffSheet(sheetName, tab) {
+  // Update tab active state
+  var tabs = document.querySelectorAll('.sheet-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  tab.classList.add('active');
+  
+  // Filter blocks
+  var blocks = document.querySelectorAll('.diff-sheet-block');
+  for (var i = 0; i < blocks.length; i++) {
+    if (sheetName === 'all' || blocks[i].getAttribute('data-sheet') === sheetName) {
+      blocks[i].style.display = '';
+    } else {
+      blocks[i].style.display = 'none';
+    }
+  }
+}
+
+function countByType(rows, type) {
+  var count = 0;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].type === type) count++;
+  }
+  return count;
+}
+
+// ==================== COMPARE PAGE ====================
+function loadCompareDocuments() {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        var select = document.getElementById('compareDocSelect');
+        select.innerHTML = '<option value="">-- Pilih Dokumen --</option>';
+        for (var i = 0; i < result.documents.length; i++) {
+          var doc = result.documents[i];
+          select.innerHTML += '<option value="' + doc.doc_id + '">' + doc.doc_id + ' - ' + escHtml(doc.doc_number) + ' - ' + escHtml(doc.title) + '</option>';
+        }
+      }
+    })
+    .withFailureHandler(handleError)
+    .serverGetDocuments(null);
+}
+
+function loadCompareVersions() {
+  var docId = document.getElementById('compareDocSelect').value;
+  if (!docId) return;
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        var versions = result.versions;
+        var oldSelect = document.getElementById('compareOldVersion');
+        var newSelect = document.getElementById('compareNewVersion');
+        
+        oldSelect.innerHTML = '<option value="">-- Pilih Versi --</option>';
+        newSelect.innerHTML = '<option value="">-- Pilih Versi --</option>';
+        
+        for (var i = 0; i < versions.length; i++) {
+          var opt = '<option value="' + versions[i].version + '">v' + versions[i].version + ' (' + formatDate(versions[i].upload_date) + ')</option>';
+          oldSelect.innerHTML += opt;
+          newSelect.innerHTML += opt;
+        }
+      }
+    })
+    .withFailureHandler(handleError)
+    .serverGetDocumentDetail(docId);
+}
+
+function runComparison() {
+  var docId = document.getElementById('compareDocSelect').value;
+  var oldVer = document.getElementById('compareOldVersion').value;
+  var newVer = document.getElementById('compareNewVersion').value;
+  
+  if (!docId || !oldVer || !newVer) {
+    showToast('Pilih dokumen dan kedua versi', 'warning');
+    return;
+  }
+  
+  if (oldVer === newVer) {
+    showToast('Pilih dua versi yang berbeda', 'warning');
+    return;
+  }
+  
+  showLoading('Membandingkan versi...');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        var container = document.getElementById('compareResult');
+        
+        var html = '<div class="card"><div class="card-header">' +
+          '<h3>🔍 Perbandingan v' + oldVer + ' → v' + newVer + '</h3></div>' +
+          '<div class="card-body" id="compareResultContent"></div></div>';
+        
+        container.innerHTML = html;
+        
+        // Reuse diff renderer
+        var tempSection = document.getElementById('diffResultSection');
+        var tempContent = document.getElementById('diffResultContent');
+        
+        // Render into compare result
+        renderDiffInContainer(result.diff, document.getElementById('compareResultContent'));
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      hideLoading();
+      handleError(err);
+    })
+    .serverCompareVersions(docId, oldVer, newVer);
+}
+
+function renderDiffInContainer(diff, container) {
+  // Same as renderDiffResult but targets specific container
+  var html = '';
+  
+  html += '<div class="diff-summary">' +
+    '<div class="diff-summary-stats">' +
+    '<div class="diff-summary-stat modified"><div class="value">' + (diff.summary.cellsModified || 0) + '</div><div class="label">Diubah</div></div>' +
+    '<div class="diff-summary-stat added"><div class="value">' + (diff.summary.cellsAdded || 0) + '</div><div class="label">Ditambah</div></div>' +
+    '<div class="diff-summary-stat removed"><div class="value">' + (diff.summary.cellsRemoved || 0) + '</div><div class="label">Dihapus</div></div>' +
+    '</div>' +
+    '<div style="font-size:0.85rem;color:var(--text-secondary);">Total: <strong>' + (diff.summary.totalChanges || 0) + '</strong> perubahan</div>' +
+    '</div>';
+  
+  if (diff.sheetDiffs) {
+    for (var s = 0; s < diff.sheetDiffs.length; s++) {
+      var sheet = diff.sheetDiffs[s];
+      html += '<div class="diff-container">';
+      
+      var statusIcon = sheet.status === 'added' ? '➕' : (sheet.status === 'removed' ? '➖' : '📝');
+      html += '<div class="diff-header"><div class="sheet-name">' + statusIcon + ' Sheet: <strong>' + escHtml(sheet.name) + '</strong></div></div>';
+      
+      html += '<table class="diff-table">';
+      html += '<tr><th style="width:80px;">Cell</th><th>Nilai Lama</th><th>Nilai Baru</th><th style="width:80px;">Tipe</th></tr>';
+      
+      for (var r = 0; r < sheet.rows.length; r++) {
+        var row = sheet.rows[r];
+        
+        if (row.type === 'Added') {
+          html += '<tr class="diff-line-new">';
+        } else if (row.type === 'Removed') {
+          html += '<tr class="diff-line-old">';
+        } else {
+          html += '<tr>';
+        }
+        
+        html += '<td class="cell-addr">' + escHtml(row.cell) + '</td>';
+        html += '<td style="background:' + (row.type !== 'Added' ? 'var(--diff-remove-bg)' : 'transparent') + ';">' + 
+          (row.type !== 'Added' ? '<span class="diff-marker remove">−</span> ' + escHtml(row.oldValue || '') : '—') + '</td>';
+        html += '<td style="background:' + (row.type !== 'Removed' ? 'var(--diff-add-bg)' : 'transparent') + ';">' + 
+          (row.type !== 'Removed' ? '<span class="diff-marker add">+</span> ' + escHtml(row.newValue || '') : '—') + '</td>';
+        
+        var typeBadge = '';
+        switch (row.type) {
+          case 'Added': typeBadge = '<span class="badge badge-approved">Added</span>'; break;
+          case 'Removed': typeBadge = '<span class="badge badge-obsolete">Removed</span>'; break;
+          default: typeBadge = '<span class="badge badge-review">Modified</span>'; break;
+        }
+        html += '<td>' + typeBadge + '</td></tr>';
+      }
+      
+      html += '</table></div>';
+    }
+  }
+  
+  container.innerHTML = html;
+}
+
+function viewVersionDiff(oldVer, newVer) {
+  showLoading('Membandingkan v' + oldVer + ' dan v' + newVer + '...');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        renderDiffResult(result.diff);
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      hideLoading();
+      handleError(err);
+    })
+    .serverCompareVersions(appState.currentDocId, oldVer, newVer);
+}
+
+// ==================== CREATE DOCUMENT ====================
+function showCreateModal() {
+  document.getElementById('newDocNumber').value = '';
+  document.getElementById('newDocTitle').value = '';
+  document.getElementById('newDocCategory').value = '';
+  document.getElementById('newDocDepartment').value = '';
+  document.getElementById('newDocFile').value = '';
+  document.getElementById('newDocFileInfo').classList.add('hidden');
+  appState.selectedNewDocFile = null;
+  
+  openModal('createDocModal');
+}
+
+function handleNewDocFile(input) {
+  var file = input.files[0];
+  if (!file) return;
+  
+  var ext = file.name.split('.').pop().toLowerCase();
+  if (['xlsx', 'xls'].indexOf(ext) === -1) {
+    showToast('Format file tidak didukung', 'error');
+    input.value = '';
+    return;
+  }
+  
+  appState.selectedNewDocFile = file;
+  document.getElementById('newDocFileInfo').classList.remove('hidden');
+  document.getElementById('newDocFileName').textContent = file.name + ' (' + formatFileSize(file.size) + ')';
+}
+
+function createDocument() {
+  var docNumber = document.getElementById('newDocNumber').value.trim();
+  var title = document.getElementById('newDocTitle').value.trim();
+  var category = document.getElementById('newDocCategory').value;
+  var department = document.getElementById('newDocDepartment').value;
+  
+  if (!docNumber) { showToast('Nomor dokumen wajib diisi', 'warning'); return; }
+  if (!title) { showToast('Judul dokumen wajib diisi', 'warning'); return; }
+  
+  showLoading('Membuat dokumen baru...');
+  closeModal('createDocModal');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        showToast(result.message, 'success');
+        
+        // If file was selected, upload it
+        if (appState.selectedNewDocFile) {
+          uploadInitialFile(result.doc_id, appState.selectedNewDocFile);
+        } else {
+          hideLoading();
+          navigateTo('detail', { docId: result.doc_id });
+        }
+      } else {
+        hideLoading();
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      hideLoading();
+      handleError(err);
+    })
+    .serverCreateDocument({
+      doc_number: docNumber,
+      title: title,
+      category: category,
+      department: department
+    });
+}
+
+function uploadInitialFile(docId, file) {
+  showLoading('Mengupload file versi 1.0...');
+  
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = btoa(
+      new Uint8Array(e.target.result)
+        .reduce(function(data, byte) { return data + String.fromCharCode(byte); }, '')
+    );
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result.success) {
+          showToast('Dokumen dan file berhasil dibuat', 'success');
+        } else {
+          showToast('Dokumen dibuat tapi file gagal diupload: ' + result.message, 'warning');
+        }
+        navigateTo('detail', { docId: docId });
+      })
+      .withFailureHandler(function(err) {
+        hideLoading();
+        handleError(err);
+        navigateTo('detail', { docId: docId });
+      })
+      .serverUploadInitialVersion(docId, base64, file.name);
+  };
+  
+  reader.readAsArrayBuffer(file);
+}
+
+// ==================== STATUS CHANGE ====================
+function changeDocStatus(docId, newStatus) {
+  var confirmMsg = 'Ubah status dokumen ke ' + newStatus + '?';
+  if (newStatus === 'Approved') {
+    confirmMsg = '✅ Approve dokumen ini?\nDokumen yang sudah Approved tidak bisa diedit langsung.';
+  }
+  
+  if (!confirm(confirmMsg)) return;
+  
+  showLoading('Mengubah status...');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadDocumentDetail(docId);
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      hideLoading();
+      handleError(err);
+    })
+    .serverChangeStatus(docId, newStatus);
+}
+
+// ==================== ADMIN ====================
+function loadUsers() {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        renderUsersTable(result.users);
+      }
+    })
+    .withFailureHandler(handleError)
+    .serverGetAllUsers();
+}
+
+function renderUsersTable(users) {
+  var tbody = document.getElementById('usersTable');
+  
+  if (!users || users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding:40px;">Tidak ada user</td></tr>';
+    return;
+  }
+  
+  var html = '';
+  for (var i = 0; i < users.length; i++) {
+    var u = users[i];
+    var statusBadge = u.is_active ? 
+      '<span class="badge badge-approved">Aktif</span>' : 
+      '<span class="badge badge-obsolete">Nonaktif</span>';
+    
+    html += '<tr>' +
+      '<td>' + escHtml(u.email) + '</td>' +
+      '<td>' + escHtml(u.name) + '</td>' +
+      '<td><span class="badge badge-draft">' + u.role + '</span></td>' +
+      '<td>' + escHtml(u.department) + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td><button class="btn btn-ghost btn-sm" onclick="editUser(\'' + escHtml(u.email) + '\')">✏️ Edit</button></td>' +
+      '</tr>';
+  }
+  
+  tbody.innerHTML = html;
+}
+
+function showAddUserModal() {
+  document.getElementById('newUserEmail').value = '';
+  document.getElementById('newUserName').value = '';
+  document.getElementById('newUserRole').value = 'Staff';
+  openModal('addUserModal');
+}
+
+function addUser() {
+  var email = document.getElementById('newUserEmail').value.trim();
+  var name = document.getElementById('newUserName').value.trim();
+  var role = document.getElementById('newUserRole').value;
+  var dept = document.getElementById('newUserDepartment').value;
+  
+  if (!email) { showToast('Email wajib diisi', 'warning'); return; }
+  
+  showLoading('Menambahkan user...');
+  closeModal('addUserModal');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadUsers();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(err) { hideLoading(); handleError(err); })
+    .serverAddUser({ email: email, name: name, role: role, department: dept });
+}
+
+function editUser(email) {
+  var newRole = prompt('Masukkan role baru (Staff/Supervisor/Manager/Admin):');
+  if (!newRole) return;
+  
+  if (['Staff', 'Supervisor', 'Manager', 'Admin'].indexOf(newRole) === -1) {
+    showToast('Role tidak valid', 'error');
+    return;
+  }
+  
+  showLoading('Mengupdate user...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) loadUsers();
+    })
+    .withFailureHandler(function(err) { hideLoading(); handleError(err); })
+    .serverUpdateUser(email, { role: newRole });
+}
+
+// ==================== UTILITY FUNCTIONS ====================
+function openFile(fileId) {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        window.open(result.url, '_blank');
+      }
+    })
+    .serverGetFileUrl(fileId);
+}
+
+function getStatusBadge(status) {
+  var cls = 'badge-draft';
+  var icon = '📝';
+  switch (status) {
+    case 'Draft': cls = 'badge-draft'; icon = '📝'; break;
+    case 'Review': cls = 'badge-review'; icon = '⏳'; break;
+    case 'Approved': cls = 'badge-approved'; icon = '✅'; break;
+    case 'Obsolete': cls = 'badge-obsolete'; icon = '🗃️'; break;
+  }
+  return '<span class="badge ' + cls + '">' + icon + ' ' + status + '</span>';
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    var d = new Date(dateStr);
+    return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) + 
+           ' ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  } catch (e) {
+    return dateStr.toString();
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return str.toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function updateUserDisplay() {
+  if (!appState.currentUser) return;
+  
+  var u = appState.currentUser;
+  document.getElementById('userName').textContent = u.name || u.email;
+  document.getElementById('userRole').textContent = u.role;
+  document.getElementById('userAvatar').textContent = (u.name || u.email).charAt(0).toUpperCase();
+  
+  // Show admin tab if admin
+  if (u.permissions && u.permissions.isAdmin) {
+    document.getElementById('adminTab').style.display = '';
+  }
+}
+
+function populateFilters() {
+  if (!appState.config) return;
+  
+  // Categories
+  var catSelects = [document.getElementById('filterCategory'), document.getElementById('newDocCategory')];
+  for (var s = 0; s < catSelects.length; s++) {
+    if (!catSelects[s]) continue;
+    for (var i = 0; i < appState.config.categories.length; i++) {
+      catSelects[s].innerHTML += '<option value="' + appState.config.categories[i] + '">' + appState.config.categories[i] + '</option>';
+    }
+  }
+  
+  // Departments
+  var deptSelects = [
+    document.getElementById('filterDepartment'), 
+    document.getElementById('newDocDepartment'),
+    document.getElementById('newUserDepartment')
+  ];
+  for (var s = 0; s < deptSelects.length; s++) {
+    if (!deptSelects[s]) continue;
+    for (var i = 0; i < appState.config.departments.length; i++) {
+      deptSelects[s].innerHTML += '<option value="' + appState.config.departments[i] + '">' + appState.config.departments[i] + '</option>';
+    }
+  }
+}
+
+// ==================== MODALS ====================
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+// ==================== LOADING ====================
+function showLoading(text) {
+  document.getElementById('loadingText').textContent = text || 'Memproses...';
+  document.getElementById('loadingOverlay').classList.add('active');
+}
+
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('active');
+}
+
+// ==================== TOAST NOTIFICATIONS ====================
+function showToast(message, type) {
+  type = type || 'info';
+  var container = document.getElementById('toastContainer');
+  
+  var icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+  
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.innerHTML = '<span>' + (icons[type] || '') + '</span><span>' + escHtml(message) + '</span>';
+  
+  container.appendChild(toast);
+  
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100%)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(function() { toast.remove(); }, 300);
+  }, 4000);
+}
+
+// ==================== ERROR HANDLING ====================
+function handleError(error) {
+  console.error(error);
+  hideLoading();
+  showToast(error.message || 'Terjadi kesalahan', 'error');
+}
+
+// ==================== DRAG & DROP ====================
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var zones = document.querySelectorAll('.upload-zone');
+    for (var i = 0; i < zones.length; i++) {
+      zones[i].addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('dragover');
+      });
+      zones[i].addEventListener('dragleave', function(e) {
+        this.classList.remove('dragover');
+      });
+      zones[i].addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        var fileInput = document.getElementById('fileInput');
+        if (e.dataTransfer.files.length > 0 && fileInput) {
+          fileInput.files = e.dataTransfer.files;
+          handleFileSelect(fileInput);
+        }
+      });
+    }
+  });
+})();
+</script>

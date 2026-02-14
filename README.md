@@ -2,11 +2,14 @@
 
 ### PT Indofood CBP Sukses Makmur Tbk — Divisi Noodle
 
+> **Live Demo**: [https://hitographic.github.io/DOCENTRA/](https://hitographic.github.io/DOCENTRA/)  
+> **Repository**: [https://github.com/hitographic/DOCENTRA](https://github.com/hitographic/DOCENTRA)
+
 ---
 
 ## 🎯 Tentang DOCENTRA
 
-DOCENTRA adalah sistem Document Control (DC) berbasis web internal yang dibangun di atas **Google Workspace** (Google Apps Script, Google Sheets, Google Drive). Sistem ini dirancang khusus untuk pabrik mie guna mengelola versi dokumen seperti SOP, Work Instruction (WI), Formula Produksi, Spesifikasi Raw Material, QC Report, dan dokumen lainnya.
+DOCENTRA adalah sistem Document Control (DC) berbasis web yang dibangun di atas **Google Workspace** (Google Apps Script, Google Sheets, Google Drive). Sistem ini dirancang khusus untuk pabrik mie guna mengelola versi dokumen seperti SOP, Work Instruction (WI), Formula Produksi, Spesifikasi Raw Material, QC Report, dan dokumen lainnya.
 
 ### Fitur Utama:
 - ✅ **Version Control** — Upload versi baru tanpa menghapus versi lama
@@ -15,30 +18,46 @@ DOCENTRA adalah sistem Document Control (DC) berbasis web internal yang dibangun
 - ✅ **Status Workflow** — Draft → Review → Approved → Obsolete
 - ✅ **Audit Trail** — Semua perubahan tercatat lengkap
 - ✅ **Dashboard** — Statistik dan overview dokumen
-- ✅ **Google Workspace Native** — Tidak perlu server eksternal
+- ✅ **Dual Deployment** — Akses via Google Apps Script ATAU GitHub Pages
+- ✅ **Multi-User Login** — Setiap user punya akun sendiri dengan password
 
 ---
 
 ## 🏗 Arsitektur
 
+DOCENTRA mendukung **dua mode akses**:
+
 ```
-┌─────────────────────────────────────────┐
-│         DOCENTRA WebApp (UI)            │
-│      HTML + CSS + JavaScript            │
-├─────────────────────────────────────────┤
-│       Google Apps Script (Backend)       │
-│   Code.gs │ Controllers │ DiffEngine    │
-├──────────────────┬──────────────────────┤
-│  Google Sheets   │    Google Drive      │
-│   (Database)     │    (File Storage)    │
-│                  │                      │
-│ DOCUMENT_MASTER  │ DOCENTRA/            │
-│ VERSION_HISTORY  │  ├── DOC-001/        │
-│ CHANGE_LOG       │  │   ├── v1.0.xlsx   │
-│ USERS            │  │   └── v1.1.xlsx   │
-│                  │  ├── DOC-002/        │
-│                  │  └── Archive/        │
-└──────────────────┴──────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    FRONTEND (Pilih salah satu)               │
+│                                                              │
+│  ┌─────────────────────┐    ┌──────────────────────────┐    │
+│  │  Mode 1: GAS Native │    │  Mode 2: GitHub Pages    │    │
+│  │  (Index.html di GAS)│    │  (docs/index.html)       │    │
+│  │  google.script.run   │    │  fetch() → JSON API      │    │
+│  └──────────┬──────────┘    └────────────┬─────────────┘    │
+│             │                            │                   │
+└─────────────┼────────────────────────────┼───────────────────┘
+              │                            │
+              ▼                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│          Google Apps Script (Backend API)                     │
+│     doGet() + doPost() │ Controllers │ DiffEngine            │
+│                                                              │
+│  ┌─── Token Auth ───┐  ┌─── Session Auth ───┐               │
+│  │ Base64(email:pwd) │  │ getActiveUser()    │               │
+│  │ (GitHub Pages)    │  │ (GAS Native)       │               │
+│  └──────────────────┘  └────────────────────┘               │
+├──────────────────────────┬───────────────────────────────────┤
+│      Google Sheets       │         Google Drive              │
+│       (Database)         │       (File Storage)              │
+│                          │                                    │
+│  DOCUMENT_MASTER         │  DOCENTRA - Document Control/     │
+│  VERSION_HISTORY         │    ├── DOC-001/                   │
+│  CHANGE_LOG              │    │   ├── v1.0.xlsx              │
+│  USERS (+ password_hash) │    │   └── v1.1.xlsx              │
+│                          │    └── DOC-002/                   │
+└──────────────────────────┴───────────────────────────────────┘
 ```
 
 ---
@@ -47,41 +66,49 @@ DOCENTRA adalah sistem Document Control (DC) berbasis web internal yang dibangun
 
 ```
 DOCENTRA/
-├── src/
-│   ├── appsscript.json      # Manifest (scopes, timezone, services)
-│   ├── Config.gs             # Konfigurasi global
-│   ├── Setup.gs              # Initial setup & folder creation
-│   ├── Code.gs               # Entry point & server functions
-│   ├── Database.gs           # CRUD operations (Google Sheets)
-│   ├── DriveManager.gs       # File management (Google Drive)
-│   ├── DiffEngine.gs         # Excel comparison engine
-│   ├── Auth.gs               # Authentication & role management
-│   ├── DocumentController.gs # Document business logic
-│   ├── VersionController.gs  # Version & upload management
-│   ├── Index.html            # Main UI template
-│   ├── SetupPage.html        # Initial setup page
-│   ├── Stylesheet.html       # CSS (Indofood CBP theme)
-│   └── JavaScript.html       # Client-side logic
-└── README.md                 # Dokumentasi ini
+├── src/                          # Google Apps Script source files
+│   ├── appsscript.json           # Manifest (scopes, timezone, services)
+│   ├── Config.gs                 # Konfigurasi global
+│   ├── Setup.gs                  # Initial setup & folder creation
+│   ├── Code.gs                   # Entry point, doGet/doPost, JSON API router
+│   ├── Database.gs               # CRUD operations (Google Sheets)
+│   ├── DriveManager.gs           # File management (Google Drive)
+│   ├── DiffEngine.gs             # Excel comparison engine
+│   ├── Auth.gs                   # Authentication, login, token validation
+│   ├── DocumentController.gs     # Document business logic
+│   ├── VersionController.gs      # Version & upload management
+│   ├── Index.html                # GAS Native UI template
+│   ├── SetupPage.html            # Initial setup page
+│   ├── Stylesheet.html           # CSS (Indofood CBP theme)
+│   └── JavaScript.html           # Client-side logic (GAS mode)
+├── docs/                         # GitHub Pages frontend
+│   └── index.html                # Standalone SPA (login, dashboard, semua fitur)
+└── README.md                     # Dokumentasi ini
 ```
 
 ---
 
 ## 🚀 Cara Deploy
 
-### Prasyarat
-- Akun Google Workspace (Google Suite/Gsuite perusahaan)
-- Akses ke Google Apps Script (script.google.com)
-- Browser modern (Chrome/Edge/Firefox)
+DOCENTRA punya **dua mode deployment** yang bisa digunakan bersamaan:
 
-### Langkah-langkah Deploy:
+| Mode | Akses | Cocok untuk |
+|------|-------|-------------|
+| **Mode 1: GAS Native** | Buka Web App URL langsung | User internal Google Workspace |
+| **Mode 2: GitHub Pages** | Buka hitographic.github.io/DOCENTRA | Semua orang, semua device |
 
-#### 1. Buat Project di Google Apps Script
+---
+
+### 📌 BAGIAN A — Deploy Backend (Google Apps Script)
+
+> ⚠️ **Wajib dilakukan** untuk kedua mode. Backend adalah "otak" DOCENTRA.
+
+#### A1. Buat Project di Google Apps Script
 1. Buka [script.google.com](https://script.google.com)
 2. Klik **"Proyek Baru"** (New Project)
 3. Beri nama project: `DOCENTRA`
 
-#### 2. Copy File-file Script
+#### A2. Copy File-file Script
 Buat file-file berikut di Apps Script editor (klik **+** di sebelah "Files"):
 
 **File `.gs` (Server-side):**
@@ -99,55 +126,162 @@ Buat file-file berikut di Apps Script editor (klik **+** di sebelah "Files"):
 
 **File `.html` (Client-side):**
 Klik **+** > **HTML** untuk membuat file HTML:
-1. `Index.html`
-2. `SetupPage.html`
-3. `Stylesheet.html`
-4. `JavaScript.html`
+1. `Index` (menjadi Index.html)
+2. `SetupPage` (menjadi SetupPage.html)
+3. `Stylesheet` (menjadi Stylesheet.html)
+4. `JavaScript` (menjadi JavaScript.html)
 
-#### 3. Konfigurasi Manifest
+> ⚠️ **Jangan** ketik ekstensi `.html` saat membuat file di Apps Script Editor, 
+> cukup ketik nama file saja (misal: `Index`, `SetupPage`, dsb).
+
+#### A3. Konfigurasi Manifest
 1. Klik ⚙️ **Project Settings** di sidebar kiri
 2. Centang **"Show appsscript.json manifest file in editor"**
 3. Buka `appsscript.json` dan replace isinya dengan file `appsscript.json` dari folder `src/`
 
-#### 4. Aktifkan Advanced Service (Drive API)
+#### A4. Aktifkan Advanced Service (Drive API)
 1. Kembali ke **Editor** (klik ikon `< >` di sidebar kiri)
-2. Di sidebar kiri, di sebelah **"Services"**, klik ikon **`+`** (Add a service)
-3. Pada dialog yang muncul, scroll dan cari **"Drive API"**
-4. Pilih **version: v2**
-5. Klik **"Add"**
+2. Di sidebar kiri, di bawah daftar file, cari section **"Services"**
+3. Klik ikon **`+`** (Add a service) di sebelah "Services"
+4. Pada dialog yang muncul, scroll dan cari **"Drive API"**
+5. Pilih **version: v2**
+6. Klik **"Add"**
 
 > 💡 **Catatan**: Menu "Services" ada di panel **Editor** (ikon `< >`), 
 > bukan di Project Settings (ikon ⚙️). Lihat di bawah daftar file Anda,
 > akan ada section "Services" dengan tombol `+` di sampingnya.
 
-#### 5. Deploy sebagai Web App
+#### A5. Deploy sebagai Web App
 1. Klik **"Deploy"** > **"New deployment"**
 2. Klik ⚙️ di sebelah **"Select type"** > pilih **"Web app"**
 3. Konfigurasi:
-   - **Description**: `DOCENTRA v1.0`
-   - **Execute as**: `User accessing the web app`
-   - **Who has access**: `Anyone within [organization]` (untuk internal)
+   - **Description**: `DOCENTRA v2.0`
+   - **Execute as**: `Me` (akun Anda — PENTING!)
+   - **Who has access**: `Anyone` (agar bisa diakses dari GitHub Pages)
 4. Klik **"Deploy"**
-5. **Authorize** akses saat diminta
-6. Copy **Web App URL** yang diberikan
+5. **Authorize** akses saat diminta (review permissions)
+6. ✅ Copy **Web App URL** — Anda akan butuh URL ini!
 
-#### 6. Jalankan Initial Setup
+> ⚠️ **PENTING**: 
+> - **Execute as** harus `Me` (bukan "User accessing the web app")
+> - **Who has access** harus `Anyone` (bukan "Anyone within organization")
+> - Ini diperlukan agar API bisa diakses dari GitHub Pages
+
+#### A6. Jalankan Initial Setup
 1. Buka **Web App URL** di browser
-2. Halaman setup akan muncul
+2. Halaman setup akan muncul otomatis (pertama kali)
 3. Klik **"🚀 Jalankan Setup Otomatis"**
 4. Sistem akan membuat:
-   - Folder `DOCENTRA - Document Control` di Google Drive
-   - Spreadsheet database `DOCENTRA_DATABASE`
-   - Sheet: DOCUMENT_MASTER, VERSION_HISTORY, CHANGE_LOG, USERS
-   - User admin pertama (email Anda)
+   - 📁 Folder `DOCENTRA - Document Control` di Google Drive
+   - 📊 Spreadsheet database `DOCENTRA_DATABASE`
+   - 📋 Sheet: DOCUMENT_MASTER, VERSION_HISTORY, CHANGE_LOG, USERS
+   - 👤 User admin pertama (email Anda)
 5. Setelah setup selesai, klik **"Muat Ulang Aplikasi"**
 
-#### 7. Selesai! 🎉
-Anda sekarang bisa mengakses DOCENTRA melalui Web App URL.
+#### A7. Set Password Admin
+Setelah setup berhasil dan masuk ke dashboard:
+1. Buka spreadsheet **DOCENTRA_DATABASE** di Google Drive
+2. Buka sheet **USERS**
+3. Anda akan melihat akun admin Anda di baris pertama
+4. Kolom `password_hash` (kolom ke-7) masih kosong — ini normal
+5. Password akan di-set otomatis saat login pertama via GitHub Pages
 
 ---
 
-## 👥 Role System
+### 📌 BAGIAN B — Mode 1: Akses via GAS Native (Langsung)
+
+Setelah Bagian A selesai, Anda sudah bisa menggunakan DOCENTRA:
+
+1. Buka **Web App URL** di browser
+2. Dashboard langsung muncul (login otomatis via Google Account)
+3. Bagikan URL ke rekan kerja yang punya akun Google Workspace
+
+> 💡 Pada mode ini, autentikasi menggunakan Google Account secara otomatis.
+> Tidak perlu input email/password.
+
+---
+
+### 📌 BAGIAN C — Mode 2: Deploy di GitHub Pages
+
+Mode ini memungkinkan **siapa saja** mengakses DOCENTRA dari **HP, tablet, atau laptop** menggunakan **akun masing-masing** (email + password).
+
+#### C1. Push ke GitHub
+```bash
+cd "/path/to/DOCENTRA"
+git add .
+git commit -m "DOCENTRA v2.0 - Dual mode deployment"
+git push origin main
+```
+
+#### C2. Aktifkan GitHub Pages
+1. Buka repository di GitHub: [github.com/hitographic/DOCENTRA](https://github.com/hitographic/DOCENTRA)
+2. Klik **Settings** (tab di atas)
+3. Di sidebar kiri, klik **Pages**
+4. Di section "Build and deployment":
+   - **Source**: `Deploy from a branch`
+   - **Branch**: `main`
+   - **Folder**: `/docs`
+5. Klik **Save**
+6. Tunggu ~1 menit, lalu akses: **https://hitographic.github.io/DOCENTRA/**
+
+#### C3. Konfigurasi API URL
+1. Buka **https://hitographic.github.io/DOCENTRA/**
+2. Di halaman login, masukkan **API URL** (Web App URL dari langkah A5)
+3. Klik **"Simpan & Hubungkan"**
+4. URL akan tersimpan di browser (localStorage)
+
+#### C4. Login / Register
+- **Admin pertama**: Login dengan email yang sama dengan Google Account pemilik GAS
+  - Email: `[email-anda]@gmail.com`
+  - Password: Buat password baru saat pertama login (akan ter-set otomatis)
+- **User baru**: Klik "Daftar Akun Baru" → isi form → admin akan approve
+
+#### C5. Bagikan ke Tim
+Cukup bagikan link: **https://hitographic.github.io/DOCENTRA/**
+- Setiap orang login dengan akun masing-masing
+- Bisa diakses dari HP, tablet, laptop, dimana saja
+- Admin mengelola user dan role dari halaman Admin
+
+---
+
+## � Sistem Autentikasi
+
+### Mode GAS Native
+- Otomatis menggunakan Google Account (`Session.getActiveUser()`)
+- Tidak perlu input email/password
+- Hanya bisa diakses oleh pengguna yang sudah authorize
+
+### Mode GitHub Pages
+- **Token-based auth**: `Base64(email:password)`
+- Password di-hash dengan **SHA-256** sebelum disimpan
+- Token dikirim di setiap request API
+- Session tersimpan di localStorage browser
+- Logout menghapus token dari browser
+
+### Alur Login (GitHub Pages)
+```
+User input email + password
+        │
+        ▼
+  Hash password (SHA-256)
+        │
+        ▼
+  Kirim ke API: POST /doPost
+  { action: "login", email, passwordHash }
+        │
+        ▼
+  Backend: cek email di USERS sheet
+  → cocokkan password_hash
+  → return user info + token
+        │
+        ▼
+  Frontend simpan token di localStorage
+  → Redirect ke Dashboard
+```
+
+---
+
+## �👥 Role System
 
 | Role | Upload | Review | Approve | Manage Users |
 |------|--------|--------|---------|-------------|
@@ -259,12 +393,13 @@ Anda sekarang bisa mengakses DOCENTRA melalui Web App URL.
 ### USERS
 | Kolom | Tipe | Deskripsi |
 |-------|------|-----------|
-| email | String | Email Google Workspace |
+| email | String | Email pengguna |
 | name | String | Nama lengkap |
 | role | String | Staff/Supervisor/Manager/Admin |
 | department | String | Departemen |
 | is_active | Boolean | Status aktif |
 | created_at | DateTime | Tanggal terdaftar |
+| password_hash | String | Hash SHA-256 password (untuk login GitHub Pages) |
 
 ---
 
@@ -298,20 +433,39 @@ Menggunakan warna khas **Indofood CBP**:
 
 ## 🛠 Troubleshooting
 
+### "Akses ditolak: Anda tidak memiliki izin"
+→ Pastikan deployment menggunakan **Execute as: Me** dan **Who has access: Anyone**
+→ Jika sudah terlanjur deploy dengan konfigurasi lama, buat **New Deployment** baru (jangan edit deployment lama)
+
+### "CORS Error" atau "Failed to fetch" (GitHub Pages)
+→ Pastikan Web App URL sudah benar (copy persis dari Deploy result)
+→ URL harus diakhiri dengan `/exec`
+→ Pastikan deployment sudah diset **Anyone** (bukan "Anyone within organization")
+
 ### "Drive API not enabled"
-→ Pastikan Drive API v2 sudah di-enable di Services
+→ Pastikan Drive API v2 sudah di-enable di **Services** (di Editor, bukan Project Settings)
 
 ### "Authorization required"
-→ Klik "Review Permissions" dan izinkan akses
+→ Klik "Review Permissions" dan izinkan semua akses yang diminta
 
 ### "Folder not found"
 → Jalankan ulang setup atau periksa apakah folder DOCENTRA masih ada di Drive
 
 ### "Diff takes too long"
-→ File Excel yang sangat besar (>5000 baris) mungkin memerlukan waktu lebih lama. Google Apps Script memiliki limit eksekusi 6 menit.
+→ File Excel yang sangat besar (>5000 baris) mungkin memerlukan waktu lebih lama
+→ Google Apps Script memiliki limit eksekusi 6 menit
 
 ### "Cannot read .xls file"
-→ File .xls (format lama) dikonversi melalui Google Drive API. Pastikan Drive API v2 aktif.
+→ File .xls (format lama) dikonversi melalui Google Drive API. Pastikan Drive API v2 aktif
+
+### "Token expired / Silakan login ulang" (GitHub Pages)
+→ Token login tersimpan di localStorage browser
+→ Klik Logout, lalu Login ulang
+
+### Setelah update code, fitur baru tidak muncul
+→ Anda harus membuat **New Deployment** baru setiap kali mengubah code
+→ Edit deployment yang lama **tidak** akan mengupdate versi yang sudah live
+→ Setelah deploy baru, copy Web App URL baru dan update di GitHub Pages
 
 ---
 
@@ -327,15 +481,30 @@ Menggunakan warna khas **Indofood CBP**:
 
 ---
 
+## 🔄 Update / Re-deploy
+
+### Jika mengubah file .gs atau .html:
+1. Update code di Apps Script Editor
+2. **Deploy** > **New deployment** (BUKAN Manage deployments > Edit)
+3. Copy Web App URL baru
+4. Jika menggunakan GitHub Pages, update API URL di halaman login
+
+### Jika mengubah docs/index.html (frontend GitHub Pages):
+1. Edit file, commit, push ke GitHub
+2. GitHub Pages akan otomatis update dalam ~1 menit
+3. Tidak perlu deploy ulang di Apps Script
+
+---
+
 ## 📞 Support
 
 Untuk bantuan teknis, hubungi Tim IT atau Administrator DOCENTRA.
 
-**Versi**: 1.0.0  
+**Versi**: 2.0.0  
 **Dibangun untuk**: PT Indofood CBP Sukses Makmur Tbk — Divisi Noodle  
-**Platform**: Google Workspace (Apps Script)
+**Platform**: Google Workspace (Apps Script) + GitHub Pages  
+**Repository**: [github.com/hitographic/DOCENTRA](https://github.com/hitographic/DOCENTRA)
 
 ---
 
-*DOCENTRA © 2026 — Internal Use Only*
-# DOCENTRA
+*DOCENTRA © 2025 — PT Indofood CBP Sukses Makmur Tbk*

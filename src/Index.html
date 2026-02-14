@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Stylesheet'); ?>
+</head>
+<body>
+
+  <!-- ========== LOADING OVERLAY ========== -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">Memuat DOCENTRA...</div>
+  </div>
+
+  <!-- ========== TOAST NOTIFICATIONS ========== -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ========== NAVBAR ========== -->
+  <nav class="navbar">
+    <div class="navbar-brand" onclick="navigateTo('dashboard')">
+      <div class="logo-icon">📋</div>
+      <span>DOCEN<span class="accent-dot">TRA</span></span>
+    </div>
+    <div class="navbar-right">
+      <div class="navbar-user">
+        <div>
+          <div class="user-name" id="userName">Loading...</div>
+          <span class="user-role" id="userRole">-</span>
+        </div>
+        <div class="user-avatar" id="userAvatar">?</div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ========== NAVIGATION TABS ========== -->
+  <div class="nav-tabs" id="navTabs">
+    <div class="nav-tab active" data-page="dashboard" onclick="navigateTo('dashboard')">
+      📊 Dashboard
+    </div>
+    <div class="nav-tab" data-page="documents" onclick="navigateTo('documents')">
+      📁 Dokumen
+    </div>
+    <div class="nav-tab" data-page="compare" onclick="navigateTo('compare')">
+      🔍 Compare
+    </div>
+    <div class="nav-tab" data-page="admin" onclick="navigateTo('admin')" id="adminTab" style="display:none;">
+      ⚙️ Admin
+    </div>
+  </div>
+
+  <!-- ========== MAIN CONTENT ========== -->
+  <div class="main-content">
+
+    <!-- ===== DASHBOARD PAGE ===== -->
+    <div class="page-section active" id="page-dashboard">
+      <div style="margin-bottom:20px;">
+        <h2 style="color:var(--primary-dark);margin-bottom:4px;">Dashboard</h2>
+        <p style="color:var(--text-secondary);font-size:0.9rem;">Selamat datang di DOCENTRA - Document Control System</p>
+      </div>
+
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-icon">📄</div>
+          <div class="stat-info">
+            <h4>Total Dokumen</h4>
+            <div class="stat-value" id="statTotal">0</div>
+          </div>
+        </div>
+        <div class="stat-card warning">
+          <div class="stat-icon">⏳</div>
+          <div class="stat-info">
+            <h4>Pending Review</h4>
+            <div class="stat-value" id="statReview">0</div>
+          </div>
+        </div>
+        <div class="stat-card success">
+          <div class="stat-icon">✅</div>
+          <div class="stat-info">
+            <h4>Approved</h4>
+            <div class="stat-value" id="statApproved">0</div>
+          </div>
+        </div>
+        <div class="stat-card accent">
+          <div class="stat-icon">📝</div>
+          <div class="stat-info">
+            <h4>Draft</h4>
+            <div class="stat-value" id="statDraft">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>📋 Revisi Terbaru</h3>
+          <button class="btn btn-outline btn-sm" onclick="navigateTo('documents')">Lihat Semua →</button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Doc ID</th>
+                  <th>Nomor Dokumen</th>
+                  <th>Judul</th>
+                  <th>Kategori</th>
+                  <th>Versi</th>
+                  <th>Status</th>
+                  <th>Update Terakhir</th>
+                </tr>
+              </thead>
+              <tbody id="recentDocsTable">
+                <tr>
+                  <td colspan="7" class="text-center" style="padding:40px;color:var(--text-secondary);">
+                    Memuat data...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== DOCUMENTS PAGE ===== -->
+    <div class="page-section" id="page-documents">
+      <div class="flex-between mb-4">
+        <div>
+          <h2 style="color:var(--primary-dark);margin-bottom:4px;">Daftar Dokumen</h2>
+          <p style="color:var(--text-secondary);font-size:0.9rem;">Kelola semua dokumen pabrik</p>
+        </div>
+        <button class="btn btn-accent" onclick="showCreateModal()">
+          ➕ Dokumen Baru
+        </button>
+      </div>
+
+      <div class="filters-bar">
+        <div class="search-bar" style="flex:1;min-width:250px;">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="Cari dokumen..." id="searchInput" onkeyup="handleSearch(this.value)">
+        </div>
+        <select class="form-select" style="width:auto;min-width:150px;" id="filterStatus" onchange="applyFilters()">
+          <option value="">Semua Status</option>
+          <option value="Draft">Draft</option>
+          <option value="Review">Review</option>
+          <option value="Approved">Approved</option>
+          <option value="Obsolete">Obsolete</option>
+        </select>
+        <select class="form-select" style="width:auto;min-width:150px;" id="filterCategory" onchange="applyFilters()">
+          <option value="">Semua Kategori</option>
+        </select>
+        <select class="form-select" style="width:auto;min-width:150px;" id="filterDepartment" onchange="applyFilters()">
+          <option value="">Semua Departemen</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-body" style="padding:0;">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Doc ID</th>
+                  <th>Nomor Dokumen</th>
+                  <th>Judul</th>
+                  <th>Kategori</th>
+                  <th>Departemen</th>
+                  <th>Versi</th>
+                  <th>Status</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="documentsTable">
+                <tr>
+                  <td colspan="8" class="text-center" style="padding:40px;color:var(--text-secondary);">
+                    Memuat data...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== DOCUMENT DETAIL PAGE ===== -->
+    <div class="page-section" id="page-detail">
+      <div class="breadcrumb">
+        <a onclick="navigateTo('documents')">Dokumen</a>
+        <span class="separator">›</span>
+        <span id="detailBreadcrumb">Detail</span>
+      </div>
+
+      <div class="detail-grid">
+        <!-- Main Content -->
+        <div>
+          <div class="card mb-4">
+            <div class="card-header">
+              <h3 id="detailTitle">📄 Dokumen</h3>
+              <div class="flex gap-2" id="detailActions">
+                <!-- Actions will be injected -->
+              </div>
+            </div>
+            <div class="card-body">
+              <div id="detailInfo">
+                <!-- Info will be injected -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Upload New Version -->
+          <div class="card mb-4" id="uploadSection">
+            <div class="card-header">
+              <h3>📤 Upload Versi Baru</h3>
+            </div>
+            <div class="card-body">
+              <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click();">
+                <div class="upload-icon">📁</div>
+                <p>Klik atau drag file Excel di sini</p>
+                <p class="file-types">Format yang diterima: .xlsx, .xls (Max 25MB)</p>
+              </div>
+              <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;" onchange="handleFileSelect(this)">
+              
+              <div id="selectedFileInfo" class="hidden mt-4">
+                <div class="flex-between" style="padding:10px;background:var(--success-light);border-radius:var(--radius-sm);">
+                  <div class="flex gap-2" style="align-items:center;">
+                    <span>📎</span>
+                    <span id="selectedFileName" style="font-weight:600;"></span>
+                    <span id="selectedFileSize" style="color:var(--text-secondary);font-size:0.8rem;"></span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" onclick="clearFileSelection()">✕</button>
+                </div>
+              </div>
+              
+              <div class="form-group mt-4">
+                <label class="form-label">Ringkasan Perubahan (opsional)</label>
+                <textarea class="form-control" id="changeSummaryInput" placeholder="Jelaskan perubahan yang dilakukan..."></textarea>
+              </div>
+              
+              <button class="btn btn-primary btn-lg" id="uploadBtn" onclick="uploadNewVersion()" disabled style="width:100%;justify-content:center;">
+                📤 Upload & Bandingkan
+              </button>
+            </div>
+          </div>
+
+          <!-- Diff Result -->
+          <div class="card mb-4 hidden" id="diffResultSection">
+            <div class="card-header">
+              <h3>🔍 Hasil Perbandingan</h3>
+            </div>
+            <div class="card-body" id="diffResultContent">
+              <!-- Diff content will be injected -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="detail-sidebar">
+          <!-- Status & Info -->
+          <div class="card">
+            <div class="card-header">
+              <h3>📋 Informasi</h3>
+            </div>
+            <div class="card-body" id="detailSidebar">
+              <!-- Sidebar info will be injected -->
+            </div>
+          </div>
+
+          <!-- Version History -->
+          <div class="card">
+            <div class="card-header">
+              <h3>📜 Riwayat Versi</h3>
+            </div>
+            <div class="card-body" id="versionTimeline">
+              <!-- Timeline will be injected -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== COMPARE PAGE ===== -->
+    <div class="page-section" id="page-compare">
+      <div>
+        <h2 style="color:var(--primary-dark);margin-bottom:4px;">🔍 Bandingkan Versi</h2>
+        <p style="color:var(--text-secondary);font-size:0.9rem;">Pilih dokumen dan dua versi untuk dibandingkan</p>
+      </div>
+
+      <div class="card mt-4">
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Pilih Dokumen</label>
+              <select class="form-select" id="compareDocSelect" onchange="loadCompareVersions()">
+                <option value="">-- Pilih Dokumen --</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Versi Lama</label>
+              <select class="form-select" id="compareOldVersion">
+                <option value="">-- Pilih Versi --</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Versi Baru</label>
+              <select class="form-select" id="compareNewVersion">
+                <option value="">-- Pilih Versi --</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="runComparison()" style="height:42px;">
+              🔍 Bandingkan
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="compareResult" class="mt-4">
+        <!-- Compare results will be injected -->
+      </div>
+    </div>
+
+    <!-- ===== ADMIN PAGE ===== -->
+    <div class="page-section" id="page-admin">
+      <div class="flex-between mb-4">
+        <div>
+          <h2 style="color:var(--primary-dark);margin-bottom:4px;">⚙️ Admin Panel</h2>
+          <p style="color:var(--text-secondary);font-size:0.9rem;">Kelola pengguna dan konfigurasi sistem</p>
+        </div>
+        <button class="btn btn-primary" onclick="showAddUserModal()">
+          ➕ Tambah User
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>👥 Daftar Pengguna</h3>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Nama</th>
+                  <th>Role</th>
+                  <th>Departemen</th>
+                  <th>Status</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="usersTable">
+                <tr>
+                  <td colspan="6" class="text-center" style="padding:40px;color:var(--text-secondary);">
+                    Memuat data...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========== MODALS ========== -->
+
+  <!-- Create Document Modal -->
+  <div class="modal-overlay" id="createDocModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>📄 Buat Dokumen Baru</h3>
+        <button class="modal-close" onclick="closeModal('createDocModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Nomor Dokumen *</label>
+          <input type="text" class="form-control" id="newDocNumber" placeholder="e.g. SOP-PRD-001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Judul Dokumen *</label>
+          <input type="text" class="form-control" id="newDocTitle" placeholder="e.g. SOP Mixing Adonan Mi">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kategori</label>
+          <select class="form-select" id="newDocCategory">
+            <option value="">-- Pilih Kategori --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Departemen</label>
+          <select class="form-select" id="newDocDepartment">
+            <option value="">-- Pilih Departemen --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">File Excel (versi 1.0)</label>
+          <div class="upload-zone" style="padding:20px;" onclick="document.getElementById('newDocFile').click();">
+            <div class="upload-icon" style="font-size:2rem;">📁</div>
+            <p style="font-size:0.85rem;">Klik untuk pilih file .xlsx atau .xls</p>
+          </div>
+          <input type="file" id="newDocFile" accept=".xlsx,.xls" style="display:none;" onchange="handleNewDocFile(this)">
+          <div id="newDocFileInfo" class="hidden mt-2" style="padding:8px;background:var(--success-light);border-radius:var(--radius-sm);font-size:0.85rem;">
+            📎 <span id="newDocFileName"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('createDocModal')">Batal</button>
+        <button class="btn btn-primary" onclick="createDocument()">Buat Dokumen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add User Modal -->
+  <div class="modal-overlay" id="addUserModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>👤 Tambah User Baru</h3>
+        <button class="modal-close" onclick="closeModal('addUserModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Email *</label>
+          <input type="email" class="form-control" id="newUserEmail" placeholder="email@indofood.co.id">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nama</label>
+          <input type="text" class="form-control" id="newUserName" placeholder="Nama lengkap">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-select" id="newUserRole">
+            <option value="Staff">Staff</option>
+            <option value="Supervisor">Supervisor</option>
+            <option value="Manager">Manager</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Departemen</label>
+          <select class="form-select" id="newUserDepartment">
+            <option value="">-- Pilih Departemen --</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('addUserModal')">Batal</button>
+        <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('JavaScript'); ?>
+</body>
+</html>
