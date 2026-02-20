@@ -150,7 +150,7 @@ var VersionController = {
         return { success: false, message: validation.message };
       }
       
-      var version = initialVersion || '1.0';
+      var version = String(initialVersion || '1.0');
       
       // Simpan file
       var savedFile = DriveManager.saveFile(
@@ -171,7 +171,7 @@ var VersionController = {
       
       return {
         success: true,
-        message: 'Dokumen versi 1.0 berhasil diupload',
+        message: 'Dokumen versi ' + version + ' berhasil diupload',
         version: version,
         file_id: savedFile.file_id
       };

@@ -85,13 +85,19 @@ var Database = {
     var documents = [];
     
     for (var i = 0; i < data.length; i++) {
+      // Format version: pastikan selalu ada desimal (1 → "1.0", 1.1 → "1.1")
+      var ver = data[i][5];
+      if (ver !== '' && ver !== null && ver !== undefined) {
+        ver = String(ver);
+        if (ver.indexOf('.') === -1) ver = ver + '.0';
+      }
       documents.push({
         doc_id: data[i][0],
         doc_number: data[i][1],
         title: data[i][2],
         category: data[i][3],
         department: data[i][4],
-        current_version: data[i][5],
+        current_version: ver,
         status: data[i][6],
         folder_id: data[i][7],
         created_at: data[i][8],
@@ -233,9 +239,14 @@ var Database = {
     
     for (var i = 0; i < data.length; i++) {
       if (data[i][0] === docId) {
+        var ver = data[i][1];
+        if (ver !== '' && ver !== null && ver !== undefined) {
+          ver = String(ver);
+          if (ver.indexOf('.') === -1) ver = ver + '.0';
+        }
         versions.push({
           doc_id: data[i][0],
-          version: data[i][1],
+          version: ver,
           file_id: data[i][2],
           file_name: data[i][3],
           uploaded_by: data[i][4],

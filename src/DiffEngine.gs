@@ -404,6 +404,19 @@ var DiffEngine = {
   },
   
   /**
+   * Konversi nomor kolom ke huruf (1=A, 2=B, 27=AA, dst)
+   */
+  columnToLetter_: function(column) {
+    var letter = '';
+    while (column > 0) {
+      var temp = (column - 1) % 26;
+      letter = String.fromCharCode(temp + 65) + letter;
+      column = Math.floor((column - temp - 1) / 26);
+    }
+    return letter;
+  },
+  
+  /**
    * Generate ringkasan perubahan dalam teks
    */
   generateChangeSummary: function(diffResult) {
