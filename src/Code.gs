@@ -87,7 +87,7 @@ function doPost(e) {
           'application/octet-stream',
           data.fileName
         );
-        return jsonResponse(VersionController.uploadInitialVersion(data.docId, blob1));
+        return jsonResponse(VersionController.uploadInitialVersion(data.docId, blob1, data.initialVersion || '1.0'));
       
       case 'uploadNewVersion':
         var blob2 = Utilities.newBlob(
@@ -255,13 +255,13 @@ function serverChangeStatus(docId, newStatus) {
   return DocumentController.changeStatus(docId, newStatus);
 }
 
-function serverUploadInitialVersion(docId, fileData, fileName) {
+function serverUploadInitialVersion(docId, fileData, fileName, initialVersion) {
   var blob = Utilities.newBlob(
     Utilities.base64Decode(fileData),
     'application/octet-stream',
     fileName
   );
-  return VersionController.uploadInitialVersion(docId, blob);
+  return VersionController.uploadInitialVersion(docId, blob, initialVersion || '1.0');
 }
 
 function serverUploadNewVersion(docId, fileData, fileName, changeSummary) {

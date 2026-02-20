@@ -281,7 +281,7 @@ var DiffEngine = {
    * Format hasil diff untuk tampilan HTML
    * Mengelompokkan per sheet dengan context
    */
-  formatDiffForDisplay: function(diffResult) {
+  formatDiffForDisplay: function(diffResult, oldData, newData) {
     var display = {
       summary: diffResult.summary,
       sheetDiffs: []
@@ -314,7 +314,93 @@ var DiffEngine = {
       display.sheetDiffs.push(sheetDiff);
     }
     
+    // Tambahkan data sheet mentah untuk side-by-side view
+    if (oldData && newData) {
+      display.sideBySide = this.buildSideBySideData_(oldData, newData, diffResult);
+    }
+    
     return display;
+  },
+  
+  /**
+   * Bangun data untuk tampilan side-by-side (kiri vs kanan)
+   * Termasuk highlight per cell berdasarkan perubahan
+   */
+  buildSideBySideData_: function(oldData, newData, diffResult) {
+    var sheets = [];
+    var allSheetNames = this.getAllSheetNames_(oldData, newData);
+    
+    for (var i = 0; i < allSheetNames.length; i++) {
+      var sheetName = allSheetNames[i];
+      var oldSheet = oldData[sheetName] || [];
+      var newSheet = newData[sheetName] || [];
+      
+      // Buat peta perubahan: { "B5": "Modified", "C6": "Added", ... }
+      var changeMap = {};
+      if (diffResult.sheets[sheetName] && diffResult.sheets[sheetName].changes) {
+        var changes = diffResult.sheets[sheetName].changes;
+        for (var c = 0; c < changes.length; c++) {
+          changeMap[changes[c].cell_address] = changes[c].change_type;
+        }
+      }
+      
+      // Tentukan ukuran grid (max rows & cols)
+      var maxRows = Math.max(oldSheet.length, newSheet.length);
+      var maxCols = 0;
+      for (var r = 0; r < oldSheet.length; r++) {
+        if (oldSheet[r] && oldSheet[r].length > maxCols) maxCols = oldSheet[r].length;
+      }
+      for (var r = 0; r < newSheet.length; r++) {
+        if (newSheet[r] && newSheet[r].length > maxCols) maxCols = newSheet[r].length;
+      }
+      
+      // Batasi ukuran agar tidak terlalu besar (max 100 rows, 30 cols)
+      maxRows = Math.min(maxRows, 100);
+      maxCols = Math.min(maxCols, 30);
+      
+      // Bangun header kolom (A, B, C, ...)
+      var colHeaders = [];
+      for (var ci = 0; ci < maxCols; ci++) {
+        colHeaders.push(this.columnToLetter_(ci + 1));
+      }
+      
+      // Bangun array data lama (oldGrid) dan baru (newGrid)
+      var oldGrid = [];
+      var newGrid = [];
+      var highlights = {}; // { "row_col": "Modified"|"Added"|"Removed" }
+      
+      for (var r = 0; r < maxRows; r++) {
+        var oldRow = [];
+        var newRow = [];
+        for (var c = 0; c < maxCols; c++) {
+          var addr = this.columnToLetter_(c + 1) + (r + 1);
+          var oldCell = (oldSheet[r] && oldSheet[r][c]) ? oldSheet[r][c] : null;
+          var newCell = (newSheet[r] && newSheet[r][c]) ? newSheet[r][c] : null;
+          
+          oldRow.push(oldCell ? (oldCell.formula || oldCell.value || '') : '');
+          newRow.push(newCell ? (newCell.formula || newCell.value || '') : '');
+          
+          if (changeMap[addr]) {
+            highlights[r + '_' + c] = changeMap[addr];
+          }
+        }
+        oldGrid.push(oldRow);
+        newGrid.push(newRow);
+      }
+      
+      sheets.push({
+        name: sheetName,
+        status: diffResult.sheets[sheetName] ? diffResult.sheets[sheetName].status : 'unchanged',
+        colHeaders: colHeaders,
+        maxRows: maxRows,
+        maxCols: maxCols,
+        oldGrid: oldGrid,
+        newGrid: newGrid,
+        highlights: highlights
+      });
+    }
+    
+    return sheets;
   },
   
   /**

@@ -296,6 +296,36 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .diff-summary-stat.added .value { color: var(--success); }
 .diff-summary-stat.removed .value { color: var(--error); }
 
+/* ========== SIDE-BY-SIDE SPREADSHEET DIFF ========== */
+.sbs-container { margin-top: 20px; }
+.sbs-sheet-section { margin-bottom: 24px; }
+.sbs-sheet-header { background: var(--primary-dark); color: var(--white); padding: 10px 16px; border-radius: var(--radius) var(--radius) 0 0; font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+.sbs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--gray); border-top: none; border-radius: 0 0 var(--radius) var(--radius); overflow: hidden; }
+.sbs-panel { overflow-x: auto; }
+.sbs-panel-header { background: var(--light-gray); padding: 8px 14px; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary); border-bottom: 1px solid var(--gray); text-align: center; text-transform: uppercase; letter-spacing: 0.5px; }
+.sbs-panel:first-child { border-right: 2px solid var(--primary); }
+.sbs-panel:first-child .sbs-panel-header { background: #fff3e0; color: #e65100; }
+.sbs-panel:last-child .sbs-panel-header { background: #e8f5e9; color: #2e7d32; }
+.sbs-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; font-family: 'Consolas','Monaco','Courier New',monospace; table-layout: fixed; }
+.sbs-table th { background: var(--light-gray); color: var(--text-secondary); padding: 4px 6px; font-size: 0.7rem; font-weight: 600; border: 1px solid var(--gray); text-align: center; position: sticky; top: 0; z-index: 1; min-width: 70px; }
+.sbs-table th.row-num { min-width: 36px; width: 36px; background: #eceff1; color: #546e7a; }
+.sbs-table td { padding: 3px 6px; border: 1px solid #e8e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; height: 24px; }
+.sbs-table td.row-num { background: #eceff1; color: #546e7a; text-align: center; font-weight: 600; font-size: 0.7rem; min-width: 36px; width: 36px; }
+.sbs-table td.cell-modified { background: #fff9c4 !important; border-color: #f9a825 !important; }
+.sbs-table td.cell-added { background: #c8e6c9 !important; border-color: #66bb6a !important; }
+.sbs-table td.cell-removed { background: #ffcdd2 !important; border-color: #ef5350 !important; }
+.sbs-legend { display: flex; gap: 16px; padding: 10px 16px; background: var(--light-gray); border-radius: var(--radius); margin-bottom: 12px; flex-wrap: wrap; align-items: center; font-size: 0.82rem; }
+.sbs-legend-item { display: flex; align-items: center; gap: 6px; }
+.sbs-legend-color { width: 18px; height: 18px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.15); }
+.sbs-legend-color.mod { background: #fff9c4; border-color: #f9a825; }
+.sbs-legend-color.add { background: #c8e6c9; border-color: #66bb6a; }
+.sbs-legend-color.rem { background: #ffcdd2; border-color: #ef5350; }
+.sbs-sheet-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; }
+.sbs-sheet-tab { padding: 6px 14px; border-radius: 16px; font-size: 0.8rem; font-weight: 500; cursor: pointer; background: var(--light-gray); color: var(--text-secondary); transition: var(--transition); border: 1px solid transparent; }
+.sbs-sheet-tab:hover { background: var(--primary-bg); color: var(--primary); }
+.sbs-sheet-tab.active { background: var(--primary); color: var(--white); border-color: var(--primary); }
+.sbs-scroll-sync { max-height: 500px; overflow: auto; }
+
 /* ========== TIMELINE ========== */
 .timeline { position: relative; padding-left: 30px; }
 .timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: var(--gray); }
@@ -591,11 +621,15 @@ textarea.form-control { resize: vertical; min-height: 80px; }
         <div class="form-group"><label class="form-label">Judul Dokumen *</label><input type="text" class="form-control" id="newDocTitle" placeholder="e.g. SOP Mixing Adonan Mi"></div>
         <div class="form-group"><label class="form-label">Kategori</label><select class="form-select" id="newDocCategory"><option value="">-- Pilih Kategori --</option></select></div>
         <div class="form-group"><label class="form-label">Departemen</label><select class="form-select" id="newDocDepartment"><option value="">-- Pilih Departemen --</option></select></div>
+        <div class="form-group"><label class="form-label">Versi Awal</label><input type="text" class="form-control" id="newDocVersion" placeholder="1.0" value="1.0" style="max-width:120px;"></div>
         <div class="form-group">
-          <label class="form-label">File Excel (versi 1.0)</label>
-          <div class="upload-zone" style="padding:20px;" onclick="document.getElementById('newDocFile').click();"><div class="upload-icon" style="font-size:2rem;">📁</div><p style="font-size:0.85rem;">Klik untuk pilih file .xlsx/.xls</p></div>
+          <label class="form-label">File Excel</label>
+          <div class="upload-zone" id="createDocUploadZone" style="padding:20px;" onclick="document.getElementById('newDocFile').click();"><div class="upload-icon" style="font-size:2rem;">📁</div><p style="font-size:0.85rem;">Klik atau drag file .xlsx/.xls ke sini</p></div>
           <input type="file" id="newDocFile" accept=".xlsx,.xls" style="display:none;" onchange="handleNewDocFile(this)">
-          <div id="newDocFileInfo" class="hidden mt-2" style="padding:8px;background:var(--success-light);border-radius:var(--radius-sm);font-size:0.85rem;">📎 <span id="newDocFileName"></span></div>
+          <div id="newDocFileInfo" class="hidden mt-2" style="padding:8px;background:var(--success-light);border-radius:var(--radius-sm);font-size:0.85rem;display:flex;align-items:center;justify-content:space-between;">
+            <span>📎 <span id="newDocFileName"></span></span>
+            <button class="btn btn-ghost btn-sm" onclick="clearNewDocFile()" style="padding:2px 8px;">✕</button>
+          </div>
         </div>
       </div>
       <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('createDocModal')">Batal</button><button class="btn btn-primary" onclick="createDocument()">Buat Dokumen</button></div>
@@ -1054,6 +1088,12 @@ function renderDiffResult(diff) {
   }
   
   content.innerHTML = html;
+  
+  // Render side-by-side view if data available
+  if (diff.sideBySide) {
+    renderSideBySide(diff.sideBySide, content);
+  }
+  
   section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1138,6 +1178,11 @@ function renderDiffInContainer(diff, container) {
     }
   }
   container.innerHTML = html;
+  
+  // Render side-by-side view if data available
+  if (diff.sideBySide) {
+    renderSideBySide(diff.sideBySide, container);
+  }
 }
 
 function viewVersionDiff(ov, nv) {
@@ -1153,6 +1198,7 @@ function showCreateModal() {
   document.getElementById('newDocTitle').value = '';
   document.getElementById('newDocCategory').value = '';
   document.getElementById('newDocDepartment').value = '';
+  document.getElementById('newDocVersion').value = '1.0';
   document.getElementById('newDocFile').value = '';
   document.getElementById('newDocFileInfo').classList.add('hidden');
   appState.selectedNewDocFile = null;
@@ -1165,7 +1211,17 @@ function handleNewDocFile(input) {
   if (['xlsx','xls'].indexOf(ext) === -1) { showToast('Format tidak didukung', 'error'); input.value = ''; return; }
   appState.selectedNewDocFile = file;
   document.getElementById('newDocFileInfo').classList.remove('hidden');
+  document.getElementById('newDocFileInfo').style.display = 'flex';
   document.getElementById('newDocFileName').textContent = file.name + ' (' + fmtSize(file.size) + ')';
+  document.getElementById('createDocUploadZone').classList.add('has-file');
+}
+
+function clearNewDocFile() {
+  appState.selectedNewDocFile = null;
+  document.getElementById('newDocFile').value = '';
+  document.getElementById('newDocFileInfo').classList.add('hidden');
+  document.getElementById('newDocFileInfo').style.display = 'none';
+  document.getElementById('createDocUploadZone').classList.remove('has-file');
 }
 
 function createDocument() {
@@ -1183,19 +1239,20 @@ function createDocument() {
     .then(function(result) {
       if (result.success) {
         showToast(result.message, 'success');
-        if (appState.selectedNewDocFile) uploadInitialFile(result.doc_id, appState.selectedNewDocFile);
+        var ver = document.getElementById('newDocVersion').value.trim() || '1.0';
+        if (appState.selectedNewDocFile) uploadInitialFile(result.doc_id, appState.selectedNewDocFile, ver);
         else { hideLoading(); navigateTo('detail', { docId: result.doc_id }); }
       } else { hideLoading(); showToast(result.message, 'error'); }
     })
     .catch(function(err) { hideLoading(); handleError(err); });
 }
 
-function uploadInitialFile(docId, file) {
-  showLoading('Mengupload file versi 1.0...');
+function uploadInitialFile(docId, file, initialVersion) {
+  showLoading('Mengupload file versi ' + (initialVersion || '1.0') + '...');
   var reader = new FileReader();
   reader.onload = function(e) {
     var base64 = btoa(new Uint8Array(e.target.result).reduce(function(d,b){ return d+String.fromCharCode(b); }, ''));
-    apiPost('uploadInitialVersion', { docId: docId, fileData: base64, fileName: file.name })
+    apiPost('uploadInitialVersion', { docId: docId, fileData: base64, fileName: file.name, initialVersion: initialVersion || '1.0' })
       .then(function(result) {
         hideLoading();
         showToast(result.success ? 'Dokumen dan file berhasil dibuat' : 'Dokumen dibuat tapi upload gagal: ' + result.message, result.success ? 'success' : 'warning');
@@ -1328,16 +1385,154 @@ function showToast(msg, type) {
 
 function handleError(err) { console.error(err); hideLoading(); showToast(err.message || 'Terjadi kesalahan', 'error'); }
 
-// Drag & Drop
-document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(function() {
-    var zones = document.querySelectorAll('.upload-zone');
-    for (var i = 0; i < zones.length; i++) {
-      zones[i].addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('dragover'); });
-      zones[i].addEventListener('dragleave', function(e) { this.classList.remove('dragover'); });
-      zones[i].addEventListener('drop', function(e) { e.preventDefault(); this.classList.remove('dragover'); var fi = document.getElementById('fileInput'); if (e.dataTransfer.files.length > 0 && fi) { fi.files = e.dataTransfer.files; handleFileSelect(fi); } });
+// ==================== SIDE-BY-SIDE DIFF RENDERING ====================
+function renderSideBySide(sideBySideData, containerEl) {
+  if (!sideBySideData || sideBySideData.length === 0) return;
+  
+  var html = '<div class="sbs-container">';
+  
+  // Legend
+  html += '<div class="sbs-legend"><strong style="font-size:0.85rem;">Keterangan:</strong>' +
+    '<div class="sbs-legend-item"><div class="sbs-legend-color mod"></div><span>Modified (Diubah)</span></div>' +
+    '<div class="sbs-legend-item"><div class="sbs-legend-color add"></div><span>Added (Ditambah)</span></div>' +
+    '<div class="sbs-legend-item"><div class="sbs-legend-color rem"></div><span>Removed (Dihapus)</span></div></div>';
+  
+  // Sheet tabs jika ada lebih dari 1 sheet
+  if (sideBySideData.length > 1) {
+    html += '<div class="sbs-sheet-tabs">';
+    for (var i = 0; i < sideBySideData.length; i++) {
+      var s = sideBySideData[i];
+      var statusIcon = s.status === 'added' ? '🟢' : (s.status === 'removed' ? '🔴' : (s.status === 'modified' ? '🟡' : '⚪'));
+      html += '<div class="sbs-sheet-tab' + (i === 0 ? ' active' : '') + '" onclick="switchSbsSheet(' + i + ')" data-sbs-idx="' + i + '">' + statusIcon + ' ' + esc(s.name) + '</div>';
     }
-  }, 100);
+    html += '</div>';
+  }
+  
+  // Render each sheet
+  for (var i = 0; i < sideBySideData.length; i++) {
+    var sheet = sideBySideData[i];
+    html += '<div class="sbs-sheet-section" id="sbsSheet_' + i + '" style="' + (i > 0 ? 'display:none;' : '') + '">';
+    html += '<div class="sbs-sheet-header">📊 Sheet: ' + esc(sheet.name) + '</div>';
+    html += '<div class="sbs-grid">';
+    
+    // Left panel (Old version)
+    html += '<div class="sbs-panel"><div class="sbs-panel-header">📄 Versi Lama</div>';
+    html += '<div class="sbs-scroll-sync" id="sbsLeft_' + i + '" onscroll="syncScroll(this,' + i + ',\'left\')">';
+    html += buildSpreadsheetTable(sheet.oldGrid, sheet.colHeaders, sheet.maxRows, sheet.highlights, 'old');
+    html += '</div></div>';
+    
+    // Right panel (New version)
+    html += '<div class="sbs-panel"><div class="sbs-panel-header">📄 Versi Baru</div>';
+    html += '<div class="sbs-scroll-sync" id="sbsRight_' + i + '" onscroll="syncScroll(this,' + i + ',\'right\')">';
+    html += buildSpreadsheetTable(sheet.newGrid, sheet.colHeaders, sheet.maxRows, sheet.highlights, 'new');
+    html += '</div></div>';
+    
+    html += '</div></div>';
+  }
+  
+  html += '</div>';
+  containerEl.innerHTML += html;
+}
+
+function buildSpreadsheetTable(grid, colHeaders, maxRows, highlights, side) {
+  var html = '<table class="sbs-table"><thead><tr><th class="row-num">#</th>';
+  for (var c = 0; c < colHeaders.length; c++) {
+    html += '<th>' + colHeaders[c] + '</th>';
+  }
+  html += '</tr></thead><tbody>';
+  
+  for (var r = 0; r < maxRows; r++) {
+    html += '<tr><td class="row-num">' + (r + 1) + '</td>';
+    var row = grid[r] || [];
+    for (var c = 0; c < colHeaders.length; c++) {
+      var val = (c < row.length) ? row[c] : '';
+      var key = r + '_' + c;
+      var cls = '';
+      if (highlights[key]) {
+        var changeType = highlights[key];
+        if (changeType === 'Modified') cls = 'cell-modified';
+        else if (changeType === 'Added') cls = (side === 'new') ? 'cell-added' : '';
+        else if (changeType === 'Removed') cls = (side === 'old') ? 'cell-removed' : '';
+      }
+      var displayVal = val.toString();
+      if (displayVal.length > 20) displayVal = displayVal.substring(0, 20) + '…';
+      html += '<td class="' + cls + '" title="' + esc(val.toString()) + '">' + esc(displayVal) + '</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+function switchSbsSheet(idx) {
+  var tabs = document.querySelectorAll('.sbs-sheet-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  var clickedTab = document.querySelector('.sbs-sheet-tab[data-sbs-idx="' + idx + '"]');
+  if (clickedTab) clickedTab.classList.add('active');
+  
+  var sections = document.querySelectorAll('.sbs-sheet-section');
+  for (var i = 0; i < sections.length; i++) sections[i].style.display = 'none';
+  var target = document.getElementById('sbsSheet_' + idx);
+  if (target) target.style.display = 'block';
+}
+
+var _sbsSyncLock = false;
+function syncScroll(source, sheetIdx, side) {
+  if (_sbsSyncLock) return;
+  _sbsSyncLock = true;
+  var otherId = (side === 'left') ? 'sbsRight_' + sheetIdx : 'sbsLeft_' + sheetIdx;
+  var other = document.getElementById(otherId);
+  if (other) {
+    other.scrollTop = source.scrollTop;
+    other.scrollLeft = source.scrollLeft;
+  }
+  setTimeout(function() { _sbsSyncLock = false; }, 10);
+}
+
+// ==================== DRAG & DROP ====================
+function initDragDrop() {
+  // Detail page upload zone
+  var detailZone = document.getElementById('uploadZone');
+  if (detailZone) {
+    detailZone.addEventListener('dragover', function(e) { e.preventDefault(); e.stopPropagation(); this.classList.add('dragover'); });
+    detailZone.addEventListener('dragleave', function(e) { e.preventDefault(); e.stopPropagation(); this.classList.remove('dragover'); });
+    detailZone.addEventListener('drop', function(e) {
+      e.preventDefault(); e.stopPropagation(); this.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) {
+        var fi = document.getElementById('fileInput');
+        fi.files = e.dataTransfer.files;
+        handleFileSelect(fi);
+      }
+    });
+  }
+  
+  // Create document modal upload zone
+  var createZone = document.getElementById('createDocUploadZone');
+  if (createZone) {
+    createZone.addEventListener('dragover', function(e) { e.preventDefault(); e.stopPropagation(); this.classList.add('dragover'); });
+    createZone.addEventListener('dragleave', function(e) { e.preventDefault(); e.stopPropagation(); this.classList.remove('dragover'); });
+    createZone.addEventListener('drop', function(e) {
+      e.preventDefault(); e.stopPropagation(); this.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) {
+        var fi = document.getElementById('newDocFile');
+        fi.files = e.dataTransfer.files;
+        handleNewDocFile(fi);
+      }
+    });
+  }
+}
+
+// Initialize drag & drop after DOM ready
+document.addEventListener('DOMContentLoaded', function() {
+  // Delay to ensure elements exist
+  setTimeout(initDragDrop, 200);
+  
+  // Also re-init when modals open (for dynamically shown elements)
+  var origOpen = openModal;
+  openModal = function(id) {
+    origOpen(id);
+    setTimeout(initDragDrop, 100);
+  };
 });
 </script>
 </body>

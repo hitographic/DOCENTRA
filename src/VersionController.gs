@@ -44,6 +44,8 @@ var VersionController = {
       // Ambil versi terakhir untuk perbandingan
       var latestVersion = Database.getLatestVersion(docId);
       var diffResult = null;
+      var oldSheetData = null;
+      var newSheetData = null;
       
       // Simpan file ke Drive
       var savedFile = DriveManager.saveFile(
@@ -53,7 +55,9 @@ var VersionController = {
       // Lakukan diff jika ada versi sebelumnya
       if (latestVersion && latestVersion.file_id) {
         try {
-          diffResult = DiffEngine.compareFiles(latestVersion.file_id, savedFile.file_id);
+          oldSheetData = DriveManager.convertExcelToSheetData(latestVersion.file_id);
+          newSheetData = DriveManager.convertExcelToSheetData(savedFile.file_id);
+          diffResult = DiffEngine.compareData(oldSheetData, newSheetData);
           
           // Auto-generate change summary jika tidak disediakan
           if (!changeSummary || changeSummary.trim() === '') {
@@ -106,7 +110,7 @@ var VersionController = {
       // Format diff untuk response
       var diffDisplay = null;
       if (diffResult) {
-        diffDisplay = DiffEngine.formatDiffForDisplay(diffResult);
+        diffDisplay = DiffEngine.formatDiffForDisplay(diffResult, oldSheetData, newSheetData);
       }
       
       return {
@@ -126,9 +130,9 @@ var VersionController = {
   },
   
   /**
-   * Upload file untuk dokumen baru (versi 1.0)
+   * Upload file untuk dokumen baru (versi awal)
    */
-  uploadInitialVersion: function(docId, fileBlob) {
+  uploadInitialVersion: function(docId, fileBlob, initialVersion) {
     try {
       Auth.authorize(CONFIG.ROLES.STAFF, 'upload dokumen');
       
@@ -146,7 +150,7 @@ var VersionController = {
         return { success: false, message: validation.message };
       }
       
-      var version = '1.0';
+      var version = initialVersion || '1.0';
       
       // Simpan file
       var savedFile = DriveManager.saveFile(
@@ -195,9 +199,13 @@ var VersionController = {
         return { success: false, message: 'Versi baru (' + versionNew + ') tidak ditemukan' };
       }
       
+      // Konversi kedua file ke data array
+      var oldData = DriveManager.convertExcelToSheetData(oldVer.file_id);
+      var newData = DriveManager.convertExcelToSheetData(newVer.file_id);
+      
       // Lakukan diff
-      var diffResult = DiffEngine.compareFiles(oldVer.file_id, newVer.file_id);
-      var diffDisplay = DiffEngine.formatDiffForDisplay(diffResult);
+      var diffResult = DiffEngine.compareData(oldData, newData);
+      var diffDisplay = DiffEngine.formatDiffForDisplay(diffResult, oldData, newData);
       
       return {
         success: true,
