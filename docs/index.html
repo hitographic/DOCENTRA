@@ -306,10 +306,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .sbs-panel:first-child { border-right: 2px solid var(--primary); }
 .sbs-panel:first-child .sbs-panel-header { background: #fff3e0; color: #e65100; }
 .sbs-panel:last-child .sbs-panel-header { background: #e8f5e9; color: #2e7d32; }
-.sbs-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; font-family: 'Consolas','Monaco','Courier New',monospace; table-layout: fixed; }
-.sbs-table th { background: var(--light-gray); color: var(--text-secondary); padding: 4px 6px; font-size: 0.7rem; font-weight: 600; border: 1px solid var(--gray); text-align: center; position: sticky; top: 0; z-index: 1; min-width: 70px; }
+.sbs-table { width: max-content; border-collapse: collapse; font-size: 0.78rem; font-family: 'Consolas','Monaco','Courier New',monospace; }
+.sbs-table th { background: var(--light-gray); color: var(--text-secondary); padding: 4px 6px; font-size: 0.7rem; font-weight: 600; border: 1px solid var(--gray); text-align: center; position: sticky; top: 0; z-index: 1; min-width: 40px; width: 70px; overflow: hidden; white-space: nowrap; position: relative; }
 .sbs-table th.row-num { min-width: 36px; width: 36px; background: #eceff1; color: #546e7a; }
-.sbs-table td { padding: 3px 6px; border: 1px solid #e8e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; height: 24px; }
+.sbs-table td { padding: 3px 6px; border: 1px solid #e8e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 24px; }
 .sbs-table td.row-num { background: #eceff1; color: #546e7a; text-align: center; font-weight: 600; font-size: 0.7rem; min-width: 36px; width: 36px; }
 .sbs-table td.cell-modified { background: #fff9c4 !important; border-color: #f9a825 !important; }
 .sbs-table td.cell-added { background: #c8e6c9 !important; border-color: #66bb6a !important; }
@@ -332,6 +332,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .sbs-zoom-toolbar .zoom-reset { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--gray); background: var(--white); cursor: pointer; font-size: 0.75rem; color: var(--text-secondary); transition: var(--transition); }
 .sbs-zoom-toolbar .zoom-reset:hover { background: var(--primary-bg); color: var(--primary); border-color: var(--primary); }
 .sbs-zoomable { transform-origin: top left; transition: transform 0.15s ease; }
+.sbs-table th { position: sticky; top: 0; z-index: 1; }
+.sbs-table th .col-resizer { position: absolute; right: 0; top: 0; width: 6px; height: 100%; cursor: col-resize; background: transparent; z-index: 2; }
+.sbs-table th .col-resizer:hover, .sbs-table th .col-resizer.active { background: var(--primary-light); opacity: 0.5; }
+.sbs-table.resizing { cursor: col-resize; user-select: none; }
+.sbs-table.resizing td, .sbs-table.resizing th { user-select: none; }
 
 /* ========== TIMELINE ========== */
 .timeline { position: relative; padding-left: 30px; }
@@ -1453,9 +1458,9 @@ function renderSideBySide(sideBySideData, containerEl) {
 }
 
 function buildSpreadsheetTable(grid, colHeaders, maxRows, highlights, side) {
-  var html = '<table class="sbs-table"><thead><tr><th class="row-num">#</th>';
+  var html = '<table class="sbs-table" data-side="' + side + '"><thead><tr><th class="row-num">#</th>';
   for (var c = 0; c < colHeaders.length; c++) {
-    html += '<th>' + colHeaders[c] + '</th>';
+    html += '<th data-col="' + c + '">' + colHeaders[c] + '<div class="col-resizer" data-col="' + c + '"></div></th>';
   }
   html += '</tr></thead><tbody>';
   
@@ -1520,6 +1525,43 @@ function sbsZoom(delta) {
   var label = document.getElementById('sbsZoomLevel');
   if (label) label.textContent = _sbsZoomLevel + '%';
 }
+
+// ==================== COLUMN RESIZE ====================
+(function() {
+  var _resizing = false, _startX = 0, _startW = 0, _colIdx = -1, _th = null;
+
+  document.addEventListener('mousedown', function(e) {
+    var resizer = e.target.closest('.col-resizer');
+    if (!resizer) return;
+    e.preventDefault();
+    _colIdx = parseInt(resizer.getAttribute('data-col'));
+    _th = resizer.parentElement;
+    _startX = e.pageX;
+    _startW = _th.offsetWidth;
+    _resizing = true;
+    resizer.classList.add('active');
+    document.querySelectorAll('.sbs-table').forEach(function(t) { t.classList.add('resizing'); });
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!_resizing) return;
+    e.preventDefault();
+    var diff = e.pageX - _startX;
+    var newW = Math.max(30, _startW + diff);
+    // Apply to all tables at this column index (syncs left & right panels)
+    document.querySelectorAll('.sbs-table').forEach(function(table) {
+      var ths = table.querySelectorAll('thead th[data-col="' + _colIdx + '"]');
+      ths.forEach(function(th) { th.style.width = newW + 'px'; });
+    });
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!_resizing) return;
+    _resizing = false;
+    document.querySelectorAll('.col-resizer.active').forEach(function(r) { r.classList.remove('active'); });
+    document.querySelectorAll('.sbs-table').forEach(function(t) { t.classList.remove('resizing'); });
+  });
+})();
 
 // ==================== DRAG & DROP ====================
 function initDragDrop() {
