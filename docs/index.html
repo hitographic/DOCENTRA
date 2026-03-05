@@ -309,7 +309,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .sbs-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; font-family: 'Consolas','Monaco','Courier New',monospace; table-layout: fixed; }
 .sbs-table th { background: var(--light-gray); color: var(--text-secondary); padding: 4px 6px; font-size: 0.7rem; font-weight: 600; border: 1px solid var(--gray); text-align: center; position: sticky; top: 0; z-index: 1; min-width: 70px; }
 .sbs-table th.row-num { min-width: 36px; width: 36px; background: #eceff1; color: #546e7a; }
-.sbs-table td { padding: 3px 6px; border: 1px solid #e8e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; height: 24px; }
+.sbs-table td { padding: 3px 6px; border: 1px solid #e8e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; height: 24px; }
 .sbs-table td.row-num { background: #eceff1; color: #546e7a; text-align: center; font-weight: 600; font-size: 0.7rem; min-width: 36px; width: 36px; }
 .sbs-table td.cell-modified { background: #fff9c4 !important; border-color: #f9a825 !important; }
 .sbs-table td.cell-added { background: #c8e6c9 !important; border-color: #66bb6a !important; }
@@ -325,6 +325,13 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .sbs-sheet-tab:hover { background: var(--primary-bg); color: var(--primary); }
 .sbs-sheet-tab.active { background: var(--primary); color: var(--white); border-color: var(--primary); }
 .sbs-scroll-sync { max-height: 500px; overflow: auto; }
+.sbs-zoom-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; justify-content: flex-end; }
+.sbs-zoom-toolbar .zoom-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--gray); background: var(--white); cursor: pointer; font-size: 1.1rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; justify-content: center; transition: var(--transition); }
+.sbs-zoom-toolbar .zoom-btn:hover { background: var(--primary-bg); border-color: var(--primary); }
+.sbs-zoom-toolbar .zoom-level { font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); min-width: 44px; text-align: center; }
+.sbs-zoom-toolbar .zoom-reset { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--gray); background: var(--white); cursor: pointer; font-size: 0.75rem; color: var(--text-secondary); transition: var(--transition); }
+.sbs-zoom-toolbar .zoom-reset:hover { background: var(--primary-bg); color: var(--primary); border-color: var(--primary); }
+.sbs-zoomable { transform-origin: top left; transition: transform 0.15s ease; }
 
 /* ========== TIMELINE ========== */
 .timeline { position: relative; padding-left: 30px; }
@@ -1397,6 +1404,15 @@ function renderSideBySide(sideBySideData, containerEl) {
     '<div class="sbs-legend-item"><div class="sbs-legend-color add"></div><span>Added (Ditambah)</span></div>' +
     '<div class="sbs-legend-item"><div class="sbs-legend-color rem"></div><span>Removed (Dihapus)</span></div></div>';
   
+  // Zoom toolbar
+  html += '<div class="sbs-zoom-toolbar">' +
+    '<span style="font-size:0.8rem;color:var(--text-secondary);margin-right:4px;">🔍 Zoom:</span>' +
+    '<button class="zoom-btn" onclick="sbsZoom(-10)" title="Zoom Out">−</button>' +
+    '<span class="zoom-level" id="sbsZoomLevel">100%</span>' +
+    '<button class="zoom-btn" onclick="sbsZoom(10)" title="Zoom In">+</button>' +
+    '<button class="zoom-reset" onclick="sbsZoom(0)" title="Reset Zoom">Reset</button>' +
+    '</div>';
+  
   // Sheet tabs jika ada lebih dari 1 sheet
   if (sideBySideData.length > 1) {
     html += '<div class="sbs-sheet-tabs">';
@@ -1413,19 +1429,21 @@ function renderSideBySide(sideBySideData, containerEl) {
     var sheet = sideBySideData[i];
     html += '<div class="sbs-sheet-section" id="sbsSheet_' + i + '" style="' + (i > 0 ? 'display:none;' : '') + '">';
     html += '<div class="sbs-sheet-header">📊 Sheet: ' + esc(sheet.name) + '</div>';
-    html += '<div class="sbs-grid">';
+    html += '<div class="sbs-grid" id="sbsGrid_' + i + '">';
     
     // Left panel (Old version)
     html += '<div class="sbs-panel"><div class="sbs-panel-header">📄 Versi Lama</div>';
     html += '<div class="sbs-scroll-sync" id="sbsLeft_' + i + '" onscroll="syncScroll(this,' + i + ',\'left\')">';
+    html += '<div class="sbs-zoomable" data-sbs-zoom="true">';
     html += buildSpreadsheetTable(sheet.oldGrid, sheet.colHeaders, sheet.maxRows, sheet.highlights, 'old');
-    html += '</div></div>';
+    html += '</div></div></div>';
     
     // Right panel (New version)
     html += '<div class="sbs-panel"><div class="sbs-panel-header">📄 Versi Baru</div>';
     html += '<div class="sbs-scroll-sync" id="sbsRight_' + i + '" onscroll="syncScroll(this,' + i + ',\'right\')">';
+    html += '<div class="sbs-zoomable" data-sbs-zoom="true">';
     html += buildSpreadsheetTable(sheet.newGrid, sheet.colHeaders, sheet.maxRows, sheet.highlights, 'new');
-    html += '</div></div>';
+    html += '</div></div></div>';
     
     html += '</div></div>';
   }
@@ -1455,7 +1473,7 @@ function buildSpreadsheetTable(grid, colHeaders, maxRows, highlights, side) {
         else if (changeType === 'Removed') cls = (side === 'old') ? 'cell-removed' : '';
       }
       var displayVal = val.toString();
-      if (displayVal.length > 20) displayVal = displayVal.substring(0, 20) + '…';
+      if (displayVal.length > 30) displayVal = displayVal.substring(0, 30) + '…';
       html += '<td class="' + cls + '" title="' + esc(val.toString()) + '">' + esc(displayVal) + '</td>';
     }
     html += '</tr>';
@@ -1487,6 +1505,20 @@ function syncScroll(source, sheetIdx, side) {
     other.scrollLeft = source.scrollLeft;
   }
   setTimeout(function() { _sbsSyncLock = false; }, 10);
+}
+
+var _sbsZoomLevel = 100;
+function sbsZoom(delta) {
+  if (delta === 0) { _sbsZoomLevel = 100; }
+  else { _sbsZoomLevel = Math.max(30, Math.min(200, _sbsZoomLevel + delta)); }
+  var scale = _sbsZoomLevel / 100;
+  var zoomables = document.querySelectorAll('.sbs-zoomable');
+  for (var i = 0; i < zoomables.length; i++) {
+    zoomables[i].style.transform = 'scale(' + scale + ')';
+    zoomables[i].style.width = (100 / scale) + '%';
+  }
+  var label = document.getElementById('sbsZoomLevel');
+  if (label) label.textContent = _sbsZoomLevel + '%';
 }
 
 // ==================== DRAG & DROP ====================
