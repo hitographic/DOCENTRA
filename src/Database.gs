@@ -451,7 +451,8 @@ var Database = {
     
     if (lastRow <= 1) return [];
     
-    var data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+    var numCols = Math.max(sheet.getLastColumn(), 7);
+    var data = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
     var users = [];
     
     for (var i = 0; i < data.length; i++) {
@@ -468,7 +469,8 @@ var Database = {
         role: data[i][2],
         department: data[i][3],
         is_active: isActive,
-        created_at: data[i][5]
+        created_at: data[i][5],
+        password_hash: data[i][6] || ''
       });
     }
     
@@ -524,6 +526,7 @@ var Database = {
         if (updates.role !== undefined) sheet.getRange(row, 3).setValue(updates.role);
         if (updates.department !== undefined) sheet.getRange(row, 4).setValue(updates.department);
         if (updates.is_active !== undefined) sheet.getRange(row, 5).setValue(updates.is_active ? 'TRUE' : 'FALSE');
+        if (updates.password_hash !== undefined && updates.password_hash !== '') sheet.getRange(row, 7).setValue(updates.password_hash);
         return true;
       }
     }

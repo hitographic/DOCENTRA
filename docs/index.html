@@ -660,7 +660,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
         <!-- User Table -->
         <div class="card"><div class="card-header"><h3>👥 Daftar Pengguna</h3></div><div class="card-body" style="padding:0;"><div class="table-container">
-          <table><thead><tr><th style="width:40px;">No</th><th>Email</th><th>Nama</th><th>Role</th><th>Departemen</th><th>Status</th><th style="width:140px;">Aksi</th></tr></thead>
+          <table><thead><tr><th style="width:40px;">No</th><th>Email</th><th>Nama</th><th>Role</th><th>Departemen</th><th>Password Hash</th><th>Status</th><th style="width:140px;">Aksi</th></tr></thead>
           <tbody id="usersTable"><tr><td colspan="7" class="text-center" style="padding:40px;color:var(--text-secondary);">Memuat data...</td></tr></tbody></table>
         </div></div></div>
       </div>
@@ -699,6 +699,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
         <div class="form-group"><label class="form-label">Nama</label><input type="text" class="form-control" id="newUserName" placeholder="Nama lengkap"></div>
         <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="newUserRole"><option value="Staff">Staff</option><option value="Supervisor">Supervisor</option><option value="Manager">Manager</option><option value="Admin">Admin</option></select></div>
         <div class="form-group"><label class="form-label">Departemen</label><select class="form-select" id="newUserDepartment"><option value="">-- Pilih Departemen --</option></select></div>
+        <div class="form-group"><label class="form-label">Password *</label><input type="password" class="form-control" id="newUserPassword" placeholder="Password untuk user baru"></div>
       </div>
       <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('addUserModal')">Batal</button><button class="btn btn-primary" onclick="addUser()">Tambah User</button></div>
     </div>
@@ -713,6 +714,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
         <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="editUserRole"><option value="Staff">Staff</option><option value="Supervisor">Supervisor</option><option value="Manager">Manager</option><option value="Admin">Admin</option></select></div>
         <div class="form-group"><label class="form-label">Departemen</label><select class="form-select" id="editUserDepartment"><option value="">-- Pilih Departemen --</option></select></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="editUserStatus"><option value="true">Aktif</option><option value="false">Nonaktif</option></select></div>
+        <div class="form-group"><label class="form-label">Password Baru</label><input type="password" class="form-control" id="editUserPassword" placeholder="Kosongkan jika tidak diubah"></div>
       </div>
       <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('editUserModal')">Batal</button><button class="btn btn-primary" onclick="saveEditUser()">💾 Simpan Perubahan</button></div>
     </div>
@@ -1424,7 +1426,7 @@ function resetUserFilter() {
 
 function renderUsersTable(users) {
   var tbody = document.getElementById('usersTable');
-  if (!users || users.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:40px;">Tidak ada user ditemukan</td></tr>'; return; }
+  if (!users || users.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding:40px;">Tidak ada user ditemukan</td></tr>'; return; }
   var html = '';
   for (var i = 0; i < users.length; i++) {
     var u = users[i];
@@ -1433,12 +1435,14 @@ function renderUsersTable(users) {
     var toggleIcon = u.is_active ? '🚫' : '✅';
     var toggleTitle = u.is_active ? 'Nonaktifkan' : 'Aktifkan';
     var emailEsc = esc(u.email).replace(/'/g, "\\'");
+    var pwHash = u.password_hash ? '<span title="' + esc(u.password_hash) + '" style="font-family:monospace;font-size:0.75rem;color:var(--text-secondary);cursor:help;">' + esc(u.password_hash.substring(0, 12)) + '…</span>' : '<span style="color:var(--text-secondary);font-size:0.8rem;">—</span>';
     html += '<tr>' +
       '<td style="text-align:center;color:var(--text-secondary);font-size:0.8rem;">' + (i + 1) + '</td>' +
       '<td><strong>' + esc(u.email) + '</strong></td>' +
       '<td>' + esc(u.name) + '</td>' +
       '<td><span class="badge ' + roleBadge + '">' + u.role + '</span></td>' +
       '<td>' + esc(u.department) + '</td>' +
+      '<td>' + pwHash + '</td>' +
       '<td>' + st + '</td>' +
       '<td style="white-space:nowrap;">' +
         '<button class="btn btn-ghost btn-sm" onclick="editUser(\'' + emailEsc + '\')" title="Edit">✏️</button>' +
@@ -1453,6 +1457,7 @@ function showAddUserModal() {
   document.getElementById('newUserEmail').value = '';
   document.getElementById('newUserName').value = '';
   document.getElementById('newUserRole').value = 'Staff';
+  document.getElementById('newUserPassword').value = '';
   openModal('addUserModal');
 }
 
@@ -1461,10 +1466,12 @@ function addUser() {
   var name = document.getElementById('newUserName').value.trim();
   var role = document.getElementById('newUserRole').value;
   var dept = document.getElementById('newUserDepartment').value;
+  var password = document.getElementById('newUserPassword').value;
   if (!email) { showToast('Email wajib diisi', 'warning'); return; }
+  if (!password) { showToast('Password wajib diisi', 'warning'); return; }
   showLoading('Menambahkan user...');
   closeModal('addUserModal');
-  apiPost('addUser', { userData: { email: email, name: name, role: role, department: dept } })
+  apiPost('addUser', { userData: { email: email, name: name, role: role, department: dept, password: password } })
     .then(function(result) { hideLoading(); showToast(result.message, result.success ? 'success' : 'error'); if (result.success) loadUsers(); })
     .catch(function(err) { hideLoading(); handleError(err); });
 }
@@ -1494,6 +1501,7 @@ function editUser(email) {
       document.getElementById('editUserRole').value = user.role || 'Staff';
       document.getElementById('editUserDepartment').value = user.department || '';
       document.getElementById('editUserStatus').value = user.is_active ? 'true' : 'false';
+      document.getElementById('editUserPassword').value = '';
       openModal('editUserModal');
     })
     .catch(handleError);
@@ -1505,10 +1513,14 @@ function saveEditUser() {
   var role = document.getElementById('editUserRole').value;
   var dept = document.getElementById('editUserDepartment').value;
   var isActive = document.getElementById('editUserStatus').value === 'true';
+  var password = document.getElementById('editUserPassword').value;
+  
+  var updates = { name: name, role: role, department: dept, is_active: isActive };
+  if (password) { updates.password = password; }
   
   showLoading('Mengupdate user...');
   closeModal('editUserModal');
-  apiPost('updateUser', { email: email, updates: { name: name, role: role, department: dept, is_active: isActive } })
+  apiPost('updateUser', { email: email, updates: updates })
     .then(function(result) { hideLoading(); showToast(result.message, result.success ? 'success' : 'error'); if (result.success) loadUsers(); })
     .catch(function(err) { hideLoading(); handleError(err); });
 }

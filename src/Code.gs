@@ -101,13 +101,29 @@ function doPost(e) {
         if (!Auth.isAdmin()) {
           return jsonResponse({ success: false, message: 'Akses ditolak' });
         }
-        return jsonResponse(Database.addUser(data.userData || {}));
+        var addData = data.userData || {};
+        // Hash password jika diberikan
+        if (addData.password && addData.password !== '') {
+          addData.password_hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, addData.password)
+            .map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); })
+            .join('');
+          delete addData.password;
+        }
+        return jsonResponse(Database.addUser(addData));
       
       case 'updateUser':
         if (!Auth.isAdmin()) {
           return jsonResponse({ success: false, message: 'Akses ditolak' });
         }
-        var result = Database.updateUser(data.email, data.updates || {});
+        var updData = data.updates || {};
+        // Hash password jika diberikan
+        if (updData.password && updData.password !== '') {
+          updData.password_hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, updData.password)
+            .map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); })
+            .join('');
+          delete updData.password;
+        }
+        var result = Database.updateUser(data.email, updData);
         return jsonResponse({ success: result, message: result ? 'User berhasil diupdate' : 'User tidak ditemukan' });
       
       case 'deleteUser':
@@ -307,12 +323,26 @@ function serverAddUser(userData) {
   if (!Auth.isAdmin()) {
     return { success: false, message: 'Akses ditolak' };
   }
+  // Hash password jika diberikan
+  if (userData.password && userData.password !== '') {
+    userData.password_hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, userData.password)
+      .map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); })
+      .join('');
+    delete userData.password;
+  }
   return Database.addUser(userData);
 }
 
 function serverUpdateUser(email, updates) {
   if (!Auth.isAdmin()) {
     return { success: false, message: 'Akses ditolak' };
+  }
+  // Hash password jika diberikan
+  if (updates.password && updates.password !== '') {
+    updates.password_hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, updates.password)
+      .map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); })
+      .join('');
+    delete updates.password;
   }
   var result = Database.updateUser(email, updates);
   return { success: result, message: result ? 'User berhasil diupdate' : 'User tidak ditemukan' };
