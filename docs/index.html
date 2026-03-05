@@ -616,9 +616,52 @@ textarea.form-control { resize: vertical; min-height: 80px; }
           <div><h2 style="color:var(--primary-dark);margin-bottom:4px;">⚙️ Admin Panel</h2><p style="color:var(--text-secondary);font-size:0.9rem;">Kelola pengguna dan konfigurasi sistem</p></div>
           <button class="btn btn-primary" onclick="showAddUserModal()">➕ Tambah User</button>
         </div>
+
+        <!-- User Stats -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;" id="userStats"></div>
+
+        <!-- Advanced Search -->
+        <div class="card mb-4">
+          <div class="card-body" style="padding:14px 16px;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+              <div style="flex:2;min-width:200px;">
+                <label class="form-label" style="font-size:0.75rem;margin-bottom:2px;">🔍 Cari</label>
+                <input type="text" class="form-control" id="userSearchText" placeholder="Cari email, nama..." oninput="filterUsers()" style="font-size:0.85rem;">
+              </div>
+              <div style="flex:1;min-width:120px;">
+                <label class="form-label" style="font-size:0.75rem;margin-bottom:2px;">Role</label>
+                <select class="form-select" id="userFilterRole" onchange="filterUsers()" style="font-size:0.85rem;">
+                  <option value="">Semua Role</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Supervisor">Supervisor</option>
+                  <option value="Staff">Staff</option>
+                </select>
+              </div>
+              <div style="flex:1;min-width:120px;">
+                <label class="form-label" style="font-size:0.75rem;margin-bottom:2px;">Departemen</label>
+                <select class="form-select" id="userFilterDept" onchange="filterUsers()" style="font-size:0.85rem;">
+                  <option value="">Semua Dept</option>
+                </select>
+              </div>
+              <div style="flex:1;min-width:110px;">
+                <label class="form-label" style="font-size:0.75rem;margin-bottom:2px;">Status</label>
+                <select class="form-select" id="userFilterStatus" onchange="filterUsers()" style="font-size:0.85rem;">
+                  <option value="">Semua</option>
+                  <option value="active">Aktif</option>
+                  <option value="inactive">Nonaktif</option>
+                </select>
+              </div>
+              <div><button class="btn btn-ghost btn-sm" onclick="resetUserFilter()" title="Reset filter" style="padding:8px 12px;">🔄 Reset</button></div>
+            </div>
+            <div style="margin-top:8px;font-size:0.8rem;color:var(--text-secondary);" id="userFilterInfo">Menampilkan semua user</div>
+          </div>
+        </div>
+
+        <!-- User Table -->
         <div class="card"><div class="card-header"><h3>👥 Daftar Pengguna</h3></div><div class="card-body" style="padding:0;"><div class="table-container">
-          <table><thead><tr><th>Email</th><th>Nama</th><th>Role</th><th>Departemen</th><th>Status</th><th>Aksi</th></tr></thead>
-          <tbody id="usersTable"><tr><td colspan="6" class="text-center" style="padding:40px;color:var(--text-secondary);">Memuat data...</td></tr></tbody></table>
+          <table><thead><tr><th style="width:40px;">No</th><th>Email</th><th>Nama</th><th>Role</th><th>Departemen</th><th>Status</th><th style="width:140px;">Aksi</th></tr></thead>
+          <tbody id="usersTable"><tr><td colspan="7" class="text-center" style="padding:40px;color:var(--text-secondary);">Memuat data...</td></tr></tbody></table>
         </div></div></div>
       </div>
     </div>
@@ -1302,21 +1345,106 @@ function changeDocStatus(docId, newStatus) {
 }
 
 // ==================== ADMIN ====================
+var _allUsers = [];
+
 function loadUsers() {
   apiGet('getAllUsers')
-    .then(function(result) { if (result.success) renderUsersTable(result.users); })
+    .then(function(result) {
+      if (result.success) {
+        _allUsers = result.users || [];
+        populateUserDeptFilter();
+        renderUserStats();
+        filterUsers();
+      }
+    })
     .catch(handleError);
+}
+
+function populateUserDeptFilter() {
+  var sel = document.getElementById('userFilterDept');
+  if (!sel || sel.options.length > 1) return;
+  var depts = {};
+  for (var i = 0; i < _allUsers.length; i++) {
+    if (_allUsers[i].department) depts[_allUsers[i].department] = true;
+  }
+  if (appState.config && appState.config.departments) {
+    for (var d = 0; d < appState.config.departments.length; d++) depts[appState.config.departments[d]] = true;
+  }
+  Object.keys(depts).sort().forEach(function(d) {
+    var opt = document.createElement('option'); opt.value = d; opt.textContent = d; sel.appendChild(opt);
+  });
+}
+
+function renderUserStats() {
+  var total = _allUsers.length, active = 0, inactive = 0, roles = {};
+  for (var i = 0; i < _allUsers.length; i++) {
+    if (_allUsers[i].is_active) active++; else inactive++;
+    var r = _allUsers[i].role || 'Unknown';
+    roles[r] = (roles[r] || 0) + 1;
+  }
+  var html = '<div class="card" style="padding:14px;text-align:center;"><div style="font-size:1.6rem;font-weight:700;color:var(--primary-dark);">' + total + '</div><div style="font-size:0.78rem;color:var(--text-secondary);">Total User</div></div>' +
+    '<div class="card" style="padding:14px;text-align:center;"><div style="font-size:1.6rem;font-weight:700;color:var(--success);">' + active + '</div><div style="font-size:0.78rem;color:var(--text-secondary);">Aktif</div></div>' +
+    '<div class="card" style="padding:14px;text-align:center;"><div style="font-size:1.6rem;font-weight:700;color:var(--error);">' + inactive + '</div><div style="font-size:0.78rem;color:var(--text-secondary);">Nonaktif</div></div>';
+  for (var role in roles) {
+    html += '<div class="card" style="padding:14px;text-align:center;"><div style="font-size:1.6rem;font-weight:700;color:var(--primary-light);">' + roles[role] + '</div><div style="font-size:0.78rem;color:var(--text-secondary);">' + esc(role) + '</div></div>';
+  }
+  document.getElementById('userStats').innerHTML = html;
+}
+
+function filterUsers() {
+  var q = (document.getElementById('userSearchText').value || '').toLowerCase().trim();
+  var role = document.getElementById('userFilterRole').value;
+  var dept = document.getElementById('userFilterDept').value;
+  var status = document.getElementById('userFilterStatus').value;
+  
+  var filtered = _allUsers.filter(function(u) {
+    if (q && (u.email || '').toLowerCase().indexOf(q) === -1 && (u.name || '').toLowerCase().indexOf(q) === -1 && (u.department || '').toLowerCase().indexOf(q) === -1) return false;
+    if (role && u.role !== role) return false;
+    if (dept && u.department !== dept) return false;
+    if (status === 'active' && !u.is_active) return false;
+    if (status === 'inactive' && u.is_active) return false;
+    return true;
+  });
+  
+  var info = document.getElementById('userFilterInfo');
+  if (info) {
+    if (!q && !role && !dept && !status) info.textContent = 'Menampilkan semua user (' + filtered.length + ')';
+    else info.textContent = 'Ditemukan ' + filtered.length + ' dari ' + _allUsers.length + ' user';
+  }
+  renderUsersTable(filtered);
+}
+
+function resetUserFilter() {
+  document.getElementById('userSearchText').value = '';
+  document.getElementById('userFilterRole').value = '';
+  document.getElementById('userFilterDept').value = '';
+  document.getElementById('userFilterStatus').value = '';
+  filterUsers();
 }
 
 function renderUsersTable(users) {
   var tbody = document.getElementById('usersTable');
-  if (!users || users.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding:40px;">Tidak ada user</td></tr>'; return; }
+  if (!users || users.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:40px;">Tidak ada user ditemukan</td></tr>'; return; }
   var html = '';
   for (var i = 0; i < users.length; i++) {
     var u = users[i];
     var st = u.is_active ? '<span class="badge badge-approved">Aktif</span>' : '<span class="badge badge-obsolete">Nonaktif</span>';
-    html += '<tr><td>' + esc(u.email) + '</td><td>' + esc(u.name) + '</td><td><span class="badge badge-draft">' + u.role + '</span></td>' +
-      '<td>' + esc(u.department) + '</td><td>' + st + '</td><td><button class="btn btn-ghost btn-sm" onclick="editUser(\'' + esc(u.email) + '\')">✏️</button></td></tr>';
+    var roleBadge = u.role === 'Admin' ? 'badge-review' : 'badge-draft';
+    var toggleIcon = u.is_active ? '🚫' : '✅';
+    var toggleTitle = u.is_active ? 'Nonaktifkan' : 'Aktifkan';
+    var emailEsc = esc(u.email).replace(/'/g, "\\'");
+    html += '<tr>' +
+      '<td style="text-align:center;color:var(--text-secondary);font-size:0.8rem;">' + (i + 1) + '</td>' +
+      '<td><strong>' + esc(u.email) + '</strong></td>' +
+      '<td>' + esc(u.name) + '</td>' +
+      '<td><span class="badge ' + roleBadge + '">' + u.role + '</span></td>' +
+      '<td>' + esc(u.department) + '</td>' +
+      '<td>' + st + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn-ghost btn-sm" onclick="editUser(\'' + emailEsc + '\')" title="Edit">✏️</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="toggleUserStatus(\'' + emailEsc + '\',' + u.is_active + ')" title="' + toggleTitle + '">' + toggleIcon + '</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="deleteUser(\'' + emailEsc + '\')" title="Hapus" style="color:var(--error);">🗑️</button>' +
+      '</td></tr>';
   }
   tbody.innerHTML = html;
 }
@@ -1342,7 +1470,6 @@ function addUser() {
 }
 
 function editUser(email) {
-  // Find user data from the table
   apiGet('getAllUsers')
     .then(function(result) {
       if (!result.success) { showToast('Gagal memuat data user', 'error'); return; }
@@ -1352,7 +1479,6 @@ function editUser(email) {
       }
       if (!user) { showToast('User tidak ditemukan', 'error'); return; }
       
-      // Populate edit department dropdown
       var editDeptSelect = document.getElementById('editUserDepartment');
       if (editDeptSelect.options.length <= 1 && appState.config && appState.config.departments) {
         for (var d = 0; d < appState.config.departments.length; d++) {
@@ -1363,7 +1489,6 @@ function editUser(email) {
         }
       }
       
-      // Fill fields
       document.getElementById('editUserEmail').value = user.email;
       document.getElementById('editUserName').value = user.name || '';
       document.getElementById('editUserRole').value = user.role || 'Staff';
@@ -1384,6 +1509,24 @@ function saveEditUser() {
   showLoading('Mengupdate user...');
   closeModal('editUserModal');
   apiPost('updateUser', { email: email, updates: { name: name, role: role, department: dept, is_active: isActive } })
+    .then(function(result) { hideLoading(); showToast(result.message, result.success ? 'success' : 'error'); if (result.success) loadUsers(); })
+    .catch(function(err) { hideLoading(); handleError(err); });
+}
+
+function toggleUserStatus(email, currentActive) {
+  var action = currentActive ? 'menonaktifkan' : 'mengaktifkan';
+  if (!confirm('Yakin ingin ' + action + ' user ' + email + '?')) return;
+  showLoading('Mengupdate status...');
+  apiPost('updateUser', { email: email, updates: { is_active: !currentActive } })
+    .then(function(result) { hideLoading(); showToast(result.message, result.success ? 'success' : 'error'); if (result.success) loadUsers(); })
+    .catch(function(err) { hideLoading(); handleError(err); });
+}
+
+function deleteUser(email) {
+  if (!confirm('⚠️ Yakin ingin MENGHAPUS user ' + email + '?\nUser yang dihapus tidak bisa dikembalikan.')) return;
+  if (!confirm('Konfirmasi sekali lagi: Hapus permanen user ' + email + '?')) return;
+  showLoading('Menghapus user...');
+  apiPost('deleteUser', { email: email })
     .then(function(result) { hideLoading(); showToast(result.message, result.success ? 'success' : 'error'); if (result.success) loadUsers(); })
     .catch(function(err) { hideLoading(); handleError(err); });
 }

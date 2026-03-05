@@ -536,5 +536,26 @@ var Database = {
    */
   deactivateUser: function(email) {
     return this.updateUser(email, { is_active: false });
+  },
+  
+  /**
+   * Hapus user permanen (hard delete)
+   */
+  deleteUser: function(email) {
+    var sheet = this.getSheet(CONFIG.SHEETS.USERS);
+    var lastRow = sheet.getLastRow();
+    
+    if (lastRow <= 1) return false;
+    
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0].toString().toLowerCase() === email.toLowerCase()) {
+        sheet.deleteRow(i + 2);
+        return true;
+      }
+    }
+    
+    return false;
   }
 };

@@ -110,6 +110,13 @@ function doPost(e) {
         var result = Database.updateUser(data.email, data.updates || {});
         return jsonResponse({ success: result, message: result ? 'User berhasil diupdate' : 'User tidak ditemukan' });
       
+      case 'deleteUser':
+        if (!Auth.isAdmin()) {
+          return jsonResponse({ success: false, message: 'Akses ditolak' });
+        }
+        var delResult = Database.deleteUser(data.email);
+        return jsonResponse({ success: delResult, message: delResult ? 'User berhasil dihapus' : 'User tidak ditemukan' });
+      
       default:
         return jsonResponse({ success: false, message: 'Action tidak dikenal: ' + data.action });
     }
@@ -309,6 +316,14 @@ function serverUpdateUser(email, updates) {
   }
   var result = Database.updateUser(email, updates);
   return { success: result, message: result ? 'User berhasil diupdate' : 'User tidak ditemukan' };
+}
+
+function serverDeleteUser(email) {
+  if (!Auth.isAdmin()) {
+    return { success: false, message: 'Akses ditolak' };
+  }
+  var result = Database.deleteUser(email);
+  return { success: result, message: result ? 'User berhasil dihapus' : 'User tidak ditemukan' };
 }
 
 function serverSearchDocuments(query) {
