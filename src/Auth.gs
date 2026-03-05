@@ -212,11 +212,17 @@ var Auth = {
       
       // Cek password hash
       var expectedHash = Database.getUserPasswordHash(email);
-      var inputHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password)
-        .map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); })
-        .join('');
+      var isSha256 = /^[a-f0-9]{64}$/.test(expectedHash);
       
-      if (expectedHash !== inputHash) return null;
+      if (!isSha256) {
+        // Plain text password di DB
+        if (expectedHash !== password) return null;
+      } else {
+        var inputHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password)
+          .map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); })
+          .join('');
+        if (expectedHash !== inputHash) return null;
+      }
       
       return email;
     } catch(e) {
@@ -273,12 +279,27 @@ var Auth = {
       expectedHash = hash;
     }
     
-    var inputHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password)
-      .map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); })
-      .join('');
-    
-    if (expectedHash !== inputHash) {
-      return { success: false, message: 'Password salah' };
+    // Cek apakah expectedHash masih plain text (bukan SHA-256 hex 64 char)
+    var isSha256 = /^[a-f0-9]{64}$/.test(expectedHash);
+    if (!isSha256) {
+      // Password di DB masih plain text, bandingkan langsung
+      if (expectedHash !== password) {
+        return { success: false, message: 'Password salah' };
+      }
+      // Migrasi: convert plain text ke SHA-256 hash
+      var migratedHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password)
+        .map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); })
+        .join('');
+      Database.setUserPasswordHash(email, migratedHash);
+    } else {
+      // Password sudah berupa SHA-256 hash, bandingkan hash
+      var inputHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password)
+        .map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); })
+        .join('');
+      
+      if (expectedHash !== inputHash) {
+        return { success: false, message: 'Password salah' };
+      }
     }
     
     // Generate token
