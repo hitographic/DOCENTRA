@@ -661,6 +661,20 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     </div>
   </div>
 
+  <div class="modal-overlay" id="editUserModal">
+    <div class="modal">
+      <div class="modal-header"><h3>✏️ Edit User</h3><button class="modal-close" onclick="closeModal('editUserModal')">&times;</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-control" id="editUserEmail" readonly style="background:var(--light-gray);color:var(--text-secondary);"></div>
+        <div class="form-group"><label class="form-label">Nama</label><input type="text" class="form-control" id="editUserName" placeholder="Nama lengkap"></div>
+        <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="editUserRole"><option value="Staff">Staff</option><option value="Supervisor">Supervisor</option><option value="Manager">Manager</option><option value="Admin">Admin</option></select></div>
+        <div class="form-group"><label class="form-label">Departemen</label><select class="form-select" id="editUserDepartment"><option value="">-- Pilih Departemen --</option></select></div>
+        <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="editUserStatus"><option value="true">Aktif</option><option value="false">Nonaktif</option></select></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('editUserModal')">Batal</button><button class="btn btn-primary" onclick="saveEditUser()">💾 Simpan Perubahan</button></div>
+    </div>
+  </div>
+
 <script>
 /**
  * ============================================================
@@ -1328,11 +1342,48 @@ function addUser() {
 }
 
 function editUser(email) {
-  var newRole = prompt('Role baru (Staff/Supervisor/Manager/Admin):');
-  if (!newRole) return;
-  if (['Staff','Supervisor','Manager','Admin'].indexOf(newRole) === -1) { showToast('Role tidak valid', 'error'); return; }
+  // Find user data from the table
+  apiGet('getAllUsers')
+    .then(function(result) {
+      if (!result.success) { showToast('Gagal memuat data user', 'error'); return; }
+      var user = null;
+      for (var i = 0; i < result.users.length; i++) {
+        if (result.users[i].email === email) { user = result.users[i]; break; }
+      }
+      if (!user) { showToast('User tidak ditemukan', 'error'); return; }
+      
+      // Populate edit department dropdown
+      var editDeptSelect = document.getElementById('editUserDepartment');
+      if (editDeptSelect.options.length <= 1 && appState.config && appState.config.departments) {
+        for (var d = 0; d < appState.config.departments.length; d++) {
+          var opt = document.createElement('option');
+          opt.value = appState.config.departments[d];
+          opt.textContent = appState.config.departments[d];
+          editDeptSelect.appendChild(opt);
+        }
+      }
+      
+      // Fill fields
+      document.getElementById('editUserEmail').value = user.email;
+      document.getElementById('editUserName').value = user.name || '';
+      document.getElementById('editUserRole').value = user.role || 'Staff';
+      document.getElementById('editUserDepartment').value = user.department || '';
+      document.getElementById('editUserStatus').value = user.is_active ? 'true' : 'false';
+      openModal('editUserModal');
+    })
+    .catch(handleError);
+}
+
+function saveEditUser() {
+  var email = document.getElementById('editUserEmail').value;
+  var name = document.getElementById('editUserName').value.trim();
+  var role = document.getElementById('editUserRole').value;
+  var dept = document.getElementById('editUserDepartment').value;
+  var isActive = document.getElementById('editUserStatus').value === 'true';
+  
   showLoading('Mengupdate user...');
-  apiPost('updateUser', { email: email, updates: { role: newRole } })
+  closeModal('editUserModal');
+  apiPost('updateUser', { email: email, updates: { name: name, role: role, department: dept, is_active: isActive } })
     .then(function(result) { hideLoading(); showToast(result.message, result.success ? 'success' : 'error'); if (result.success) loadUsers(); })
     .catch(function(err) { hideLoading(); handleError(err); });
 }
